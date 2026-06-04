@@ -1,0 +1,27 @@
+# Dependency directories
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# Environment variables (contains secret keys)
+.env*.local
+.env*.production
+
+# SQLite database files
+prisma/*.db
+prisma/*.db-journal
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# System files
+.DS_Store
+Thumbs.db
+
+# TypeScript build info
+*.tsbuildinfo
