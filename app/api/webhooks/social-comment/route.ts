@@ -7,26 +7,47 @@ export async function POST(request: Request) {
     const body = await request.json();
     console.log('Incoming social comment webhook payload:', body);
 
-    // Extract comment details
-    const action = body.action || 'comment';
-    const commentId = body.commentId || body.id || `sim_${Date.now()}`;
-    const commentText = (body.text || '').trim();
-    const username = body.user || body.username || 'anonymous';
-    const platform = body.platform || 'instagram';
-    const postRefId = body.postRefId || body.postId || body.ayrshareId;
+    // Check if this is a comment event
+    const eventType = body.event || body.action || 'comment';
+    const isCommentEvent = eventType === 'comment.received' || eventType === 'comment';
+
+    if (!isCommentEvent) {
+      return NextResponse.json({ success: true, message: 'Ignored non-comment action/event' });
+    }
+
+    // Extract comment details dynamically (Zernio vs Ayrshare/Upload-Post vs simulator formats)
+    let commentText = '';
+    let username = '';
+    let platform = 'instagram';
+    let commentId = '';
+    let postRefId = '';
+    let accountId = body.accountId || body.account?.id || body.data?.account?.id || '';
     const socialPostId = body.socialPostId; // For simulation direct mapping
     const isSimulation = !!body.isSimulation;
 
-    // Check if this is a comment event
-    if (action !== 'comment') {
-      return NextResponse.json({ success: true, message: 'Ignored non-comment action' });
+    if (body.event === 'comment.received' || body.comment || (body.data && body.data.comment)) {
+      // Zernio payload format
+      const zComment = body.comment || (body.data && body.data.comment) || {};
+      const zPost = body.post || (body.data && body.data.post) || {};
+      commentId = zComment.id || zComment.commentId || body.id || `sim_${Date.now()}`;
+      commentText = (zComment.text || zComment.content || '').trim();
+      username = zComment.username || (zComment.user && zComment.user.username) || zComment.author || 'anonymous';
+      platform = body.platform || (body.data && body.data.platform) || 'instagram';
+      postRefId = zComment.platformPostId || zPost.platformPostId || zPost.id || body.postId || body.postRefId;
+    } else {
+      // Ayrshare/Upload-Post or simulator payload format
+      commentId = body.commentId || body.id || `sim_${Date.now()}`;
+      commentText = (body.text || '').trim();
+      username = body.username || body.user || 'anonymous';
+      platform = body.platform || 'instagram';
+      postRefId = body.postRefId || body.postId || body.ayrshareId;
     }
 
     if (!commentText) {
       return NextResponse.json({ success: true, message: 'Ignored empty comment' });
     }
 
-    // Find the social post matching either the direct ID (simulation) or the Ayrshare reference ID (webhook)
+    // Find the social post matching either the direct ID (simulation) or the reference ID (webhook)
     let socialPost = null;
     if (socialPostId) {
       socialPost = await prisma.socialPost.findUnique({
@@ -105,11 +126,11 @@ export async function POST(request: Request) {
       });
     }
 
-    // Process real Ayrshare/Upload-Post API Reply
+    // Process real Zernio API Reply
     const settings = await getSettings();
-    const { uploadpost_api_key } = settings;
+    const { zernio_api_key } = settings;
 
-    if (!uploadpost_api_key || uploadpost_api_key.includes('your_')) {
+    if (!zernio_api_key || zernio_api_key.includes('your_')) {
       // Fallback log if API key is not configured
       await prisma.interactionLog.create({
         data: {
@@ -122,26 +143,28 @@ export async function POST(request: Request) {
           socialPostId: socialPost.id,
         }
       });
-      return NextResponse.json({ error: 'Upload-Post API key not configured' }, { status: 400 });
+      return NextResponse.json({ error: 'Zernio API key not configured' }, { status: 400 });
     }
 
-    console.log(`Sending auto-reply via Upload-Post for comment: ${commentId}`);
-    const response = await fetch('https://api.upload-post.com/api/comments/reply', {
+    console.log(`Sending auto-reply via Zernio for comment: ${commentId} on post: ${postRefId}`);
+    const replyUrl = `https://zernio.com/api/v1/inbox/comments/${postRefId || socialPost.ayrshareRefId}`;
+    const response = await fetch(replyUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Apikey ${uploadpost_api_key}`,
+        'Authorization': `Bearer ${zernio_api_key}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
+        accountId,
         commentId,
-        text: responseText
+        message: responseText
       })
     });
 
     const responseData = await response.json();
 
-    if (!response.ok || responseData.success === false) {
-      console.error('Upload-Post comment reply failed:', responseData);
+    if (!response.ok || responseData.success === false || responseData.status === 'error') {
+      console.error('Zernio comment reply failed:', responseData);
       await prisma.interactionLog.create({
         data: {
           username,

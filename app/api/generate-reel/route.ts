@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
 import { getSettings } from '@/lib/settings';
+import { generateContentWithRetry } from '@/lib/gemini';
 
 export async function POST(request: Request) {
   try {
@@ -25,8 +25,6 @@ export async function POST(request: Request) {
       .map((p, idx) => `- Product ${idx + 1}: "${p.title}" (Category: ${p.category}) - ${p.customDescription || p.rawDescription || ''}`)
       .join('\n');
 
-    const ai = new GoogleGenAI({ apiKey: gemini_api_key });
-
     const systemPrompt = `You are a viral social media director and creative copywriter for an aesthetic home decor and lifestyle brand named "${brand_name}".
 Your task is to generate a comprehensive short-form video creation package (Reel / TikTok script outline) tailored to promote a curated set of products.
 Our brand guidelines:
@@ -43,7 +41,7 @@ You must return your output strictly in JSON format matching this exact schema:
   "suggestedTriggers": [
     "A list of 3 suggested short, easy-to-type comment trigger words (e.g., 'cozy', 'dorm', 'finds')"
   ],
-  "captionDraft": "An Instagram caption draft promoting the products. The first line must contain '#ad' (e.g. '#ad Comment [TRIGGER] and I\\'ll DM you the link to all these finds! ✨'). Include emojis, visual description, call-to-action, and hashtags.",
+  "captionDraft": "An Instagram caption draft promoting the products. The first line must contain '#ad' (e.g. '#ad Comment or DM [TRIGGER] to get the details! ✨'). Include emojis, visual description, call-to-action, and hashtags. CRITICAL: Do NOT put any URL link or website address in the caption text.",
   "scenes": [
     {
       "sceneNumber": 1,
@@ -60,14 +58,10 @@ ${productsList}
 
 Ensure the call to action and caption encourage users to comment one of the trigger words to automatically receive the links. Include '#ad' on the first line.`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [
-        { role: 'user', parts: [{ text: systemPrompt + '\n\n' + prompt }] }
-      ],
-      config: {
-        responseMimeType: 'application/json',
-      }
+    const response = await generateContentWithRetry({
+      apiKey: gemini_api_key,
+      prompt: systemPrompt + '\n\n' + prompt,
+      responseMimeType: 'application/json',
     });
 
     const responseText = response.text || '{}';

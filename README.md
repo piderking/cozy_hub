@@ -19,15 +19,14 @@ Create or open `.env.local` in the project root and configure your credentials:
 # Google AI Studio Gemini API Key
 GEMINI_API_KEY=your_gemini_api_key_here
 
-# Upload-Post / Ayrshare Integration Credentials
-UPLOADPOST_API_KEY=your_uploadpost_api_key_here
-UPLOADPOST_USERNAME=your_uploadpost_username_here
+# Zernio Integration Credentials
+ZERNIO_API_KEY=your_zernio_api_key_here
 
 # Local SQLite Database Path
 DATABASE_URL="file:./dev.db"
 ```
 
-*Note: For backwards compatibility, the application also accepts `AYRSHARE_API_KEY` and `AYRSHARE_USERNAME` as fallbacks.*
+*Note: For backwards compatibility, the application also accepts `UPLOADPOST_API_KEY` and `AYRSHARE_API_KEY` as fallbacks.*
 
 ### 3. Spin Up Local DB
 ```bash
@@ -50,16 +49,16 @@ Instagram does not support clickable links inside post captions. Cozy Hub includ
 
 ### Step-by-Step Setup:
 
-1. **Link Instagram Business Account to Upload-Post/Ayrshare**:
-   * Log into your **Ayrshare (Upload-Post)** console.
-   * Go to the **Social Accounts** tab.
-   * Click **Connect Instagram**. 
-   * Follow the prompts to log into Facebook and select the **Instagram Business Account** connected to your Facebook Page. Grant all required permissions.
+1. **Link Instagram Business Account to Zernio**:
+   * Log into your **Zernio** dashboard.
+   * Go to the **Accounts** or **Integrations** tab.
+   * Click **Connect Instagram** (or connect your Facebook Page).
+   * Follow the prompts to log into Facebook and select the **Instagram Business Account** connected to your page, granting all required permissions.
 
 2. **Register the Webhook**:
-   * Navigate to the **Webhooks** or **Developer API** section in your Ayrshare / Upload-Post console.
-   * Register a new webhook for **Comment Events** (when a user comments on your post/reel).
-   * Point the webhook URL to: `https://your-cozy-hub-domain.railway.app/api/webhooks/social-comment`.
+   * Navigate to the **Webhooks** section in your Zernio dashboard.
+   * Register a new webhook pointing to: `https://your-cozy-hub-domain.railway.app/api/webhooks/social-comment`.
+   * Subscribe to the **`comment.received`** event.
 
 ---
 
@@ -72,7 +71,7 @@ Follow this walkthrough to explore and configure every feature inside the Cozy H
   1. Paste an Amazon product URL under **Panel 1: Ingest & Review**.
   2. Paste the raw HTML details or specification texts, then click **Parse Product Data**.
   3. Under **Panel 2: Creative AI Curation**, click **Generate prompt**. This prompts Gemini to write a detailed visual mockup description of the item. You can edit this prompt, then click **Generate AI Mockup** to run Google's Imagen model and create a gorgeous room mockup.
-  4. Click **Generate Theme Copy & Socials** to prompt Gemini to write a custom title, search-engine-optimized description, and captions for Instagram (complete with auto-responder comment prompts), Pinterest, and Twitter.
+  4. Click **Generate Theme Copy & Socials** to prompt Gemini to write a custom title, search-engine-optimized description, and captions for Instagram (complete with auto-responder comment prompts) and Pinterest.
   5. Under **Panel 3: Social Hub & Publish**, review the copy, download the cover image for manual posting, or click **Publish to Platform** to auto-post. Click **Save Listing** to publish it to your website.
 
 ### 2. AI Scene Collections (Product Bundling)
@@ -122,8 +121,7 @@ Cozy Hub is fully compatible with hosting on **[Railway](https://railway.com/)**
    Under the **Variables** tab for the service, add:
    * `DATABASE_URL`: `file:/app/data/dev.db` *(Required)*
    * `GEMINI_API_KEY`: *(Required for AI Generation)*
-   * `UPLOADPOST_API_KEY`: *(Required for social posting & comment responder)*
-   * `UPLOADPOST_USERNAME`: *(Required for social posting)*
+   * `ZERNIO_API_KEY`: *(Required for social posting & comment responder)*
    * `PORT`: `3000`
 4. **Mount a Persistent Volume**:
    * Navigate to your Cozy Hub service in the Railway Dashboard.

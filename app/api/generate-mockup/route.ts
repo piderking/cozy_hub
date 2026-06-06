@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 import { getSettings } from '@/lib/settings';
+import { generateContentWithRetry } from '@/lib/gemini';
 
 export async function POST(request: Request) {
   try {
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
 
     // ACTION 1: GENERATE AN INITIAL PROMPT FROM PRODUCT DETAILS
     if (action === 'generate') {
-      const { title, rawDescription, category } = body;
+      const { title, rawDescription, category, mainImage } = body;
       if (!title) {
         return NextResponse.json({ error: 'Product title is required' }, { status: 400 });
       }
@@ -32,25 +33,27 @@ The goal of the prompt is to visualize a product inside a themed environment mat
 "${niche_prompt_directive}"
 
 The prompt must describe:
-- The product itself. Describe its shape, material, colors, and key physical features in detail (based on the title and description) so the mockup image matches the product as closely as possible.
+- The product itself. You must describe its shape, material, colors, and key physical features in detail based on the title, description, and reference image URL (${mainImage || ''}) so the mockup image matches the actual product as closely as possible.
 - The environment / background details (styled, clean, matching the category "${category}")
 - Lighting (e.g. warm golden hour sunbeams, soft indoor bokeh, cinematic moody shadows)
 - Composition (e.g. close-up shot, front angle, sitting on a wooden table, copy space)
 - Quality terms (e.g. photorealistic, professional product photography, 8k resolution, crisp textures)
+
+CRITICAL INSTRUCTION:
+Make sure to keep the product's visual representation in the prompt as close to the reference image URL (${mainImage || ''}) and physical details as possible, so that Google's Imagen model can render the product accurately.
 
 IMPORTANT: Output ONLY the raw prompt text. Do not write introductory words like "Here is your prompt:" or wrap in quotes. Keep it to 1 or 2 concise descriptive sentences.`;
 
       const promptGeneratorUser = `Product Title: ${title}
 Product Details: ${rawDescription || ''}
 Category: ${category}
+Reference Image URL: ${mainImage || ''}
 
 Write a professional product photography prompt for this product.`;
 
-      const promptResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: [
-          { role: 'user', parts: [{ text: promptGeneratorSystem + '\n\n' + promptGeneratorUser }] }
-        ],
+      const promptResponse = await generateContentWithRetry({
+        apiKey: gemini_api_key,
+        prompt: promptGeneratorSystem + '\n\n' + promptGeneratorUser
       });
 
       const detailedImagePrompt = promptResponse.text?.trim() || `Professional product photography of ${title} sitting in a cozy styled ${category} setup, soft warm lighting, photorealistic, 8k.`;
@@ -60,7 +63,7 @@ Write a professional product photography prompt for this product.`;
 
     // ACTION 2: REFINE / REVISE PROMPT BASED ON USER INSTRUCTIONS
     if (action === 'refine') {
-      const { originalPrompt, instructions, title, category, rawDescription } = body;
+      const { originalPrompt, instructions, title, category, rawDescription, mainImage } = body;
       if (!originalPrompt || !instructions) {
         return NextResponse.json({ error: 'Original prompt and revision instructions are required' }, { status: 400 });
       }
@@ -76,19 +79,18 @@ We are generating a mockup image for this product:
 Product Title: "${title || ''}"
 Category: "${category || ''}"
 Product Description: "${rawDescription || ''}"
+Reference Image URL: "${mainImage || ''}"
 
 Your task is to rewrite the image generation prompt to incorporate the user's revision instructions.
 CRITICAL COMPLIANCE RULES:
-1. Ensure the product's appearance, shape, material, colors, and physical details remain consistent with the original product description. Do NOT alter, simplify, or replace the product itself.
+1. Ensure the product's appearance, shape, material, colors, and physical details remain consistent with the original product description and reference image URL (${mainImage || ''}). Do NOT alter, simplify, or replace the product itself. Keep the generated mockup image visually as close to the actual reference product image as possible.
 2. Only modify the environment, background elements, surface, placement, styling, or lighting conditions of the scene according to the user's revision instructions.
 3. Keep the prompt descriptive, focused, and optimized for an image generation model.
 4. Output ONLY the raw updated prompt text. Do not wrap in quotes or add introductory text.`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: [
-          { role: 'user', parts: [{ text: refinerSystem }] }
-        ],
+      const response = await generateContentWithRetry({
+        apiKey: gemini_api_key,
+        prompt: refinerSystem
       });
 
       const refinedPrompt = response.text?.trim() || originalPrompt;

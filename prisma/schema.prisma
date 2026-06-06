@@ -33,7 +33,7 @@ model SocialPost {
   product          Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
   collectionId     String?
   collection       Collection? @relation(fields: [collectionId], references: [id], onDelete: Cascade)
-  platform         String    // "instagram", "tiktok", "pinterest", "twitter"
+  platform         String    // "instagram", "tiktok", "pinterest"
   generatedContent String
   status           String    // "DRAFT", "SENT", "FAILED"
   publishDate      DateTime?

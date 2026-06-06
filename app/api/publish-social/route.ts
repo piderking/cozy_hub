@@ -5,17 +5,11 @@ import { prisma } from '@/lib/prisma';
 export async function POST(request: Request) {
   try {
     const settings = await getSettings();
-    const { uploadpost_api_key, uploadpost_username, pinterest_board_id } = settings;
+    const { zernio_api_key, pinterest_board_id } = settings;
 
-    if (!uploadpost_api_key || uploadpost_api_key.includes('your_')) {
+    if (!zernio_api_key || zernio_api_key.includes('your_')) {
       return NextResponse.json(
-        { error: 'Please configure a valid Upload-Post API Key in the settings tab first.' },
-        { status: 400 }
-      );
-    }
-    if (!uploadpost_username) {
-      return NextResponse.json(
-        { error: 'Please configure your Upload-Post Profile Username in the settings tab first.' },
+        { error: 'Please configure a valid Zernio API Key in your env variables first.' },
         { status: 400 }
       );
     }
@@ -31,18 +25,14 @@ export async function POST(request: Request) {
     const product = productId ? await prisma.product.findUnique({ where: { id: productId } }) : null;
     const collection = collectionId ? await prisma.collection.findUnique({ where: { id: collectionId } }) : null;
 
-    // Map platforms: 'twitter' -> 'x'
-    const mappedPlatforms = platforms.map(p => {
-      const lower = p.toLowerCase();
-      if (lower === 'twitter') return 'x';
-      return lower;
-    });
+    // Map platforms, filtering out X / Twitter
+    const mappedPlatforms = platforms
+      .map(p => p.toLowerCase())
+      .filter(p => p !== 'x' && p !== 'twitter');
 
-    const formData = new FormData();
-    formData.append('user', uploadpost_username);
-    mappedPlatforms.forEach(p => {
-      formData.append('platform[]', p);
-    });
+    if (mappedPlatforms.length === 0) {
+      return NextResponse.json({ error: 'No valid platforms selected. Twitter/X is not supported.' }, { status: 400 });
+    }
 
     // Ensure title is short (Pinterest limits title to 100 chars max)
     let postTitle = 'Cozy Hub Recommendation';
@@ -68,11 +58,10 @@ export async function POST(request: Request) {
       postDescription = postDescription.substring(0, 495) + '...';
     }
 
-    formData.append('title', postTitle);
-    formData.append('description', postDescription);
-
     const origin = request.headers.get('origin') || 'http://localhost:3000';
 
+    // Handle Pinterest Options
+    let pinterestOptions: any = undefined;
     if (mappedPlatforms.includes('pinterest')) {
       if (!pinterest_board_id) {
         return NextResponse.json(
@@ -80,19 +69,26 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
-      formData.append('pinterest_board_id', pinterest_board_id);
       
-      // For Pinterest, set the direct destination link:
-      // Product affiliate URL, or the Collection landing page
+      let pinterestLink = origin;
       if (collection) {
-        formData.append('pinterest_link', `${origin}/collections/${collection.slug}`);
+        pinterestLink = `${origin}/collections/${collection.slug}`;
       } else if (product?.affiliateUrl) {
-        formData.append('pinterest_link', product.affiliateUrl);
+        pinterestLink = product.affiliateUrl;
       }
+
+      pinterestOptions = {
+        boardId: pinterest_board_id,
+        board_id: pinterest_board_id,
+        title: postTitle,
+        link: pinterestLink
+      };
     }
 
-    // Attach photos
-    let hasPhotos = false;
+    // Prepare media URLs and media IDs
+    const zernioMediaUrls: string[] = [];
+    const zernioMediaIds: string[] = [];
+
     if (mediaUrls && mediaUrls.length > 0) {
       for (const mediaUrl of mediaUrls) {
         try {
@@ -103,45 +99,76 @@ export async function POST(request: Request) {
               const ext = contentType.split('/')[1] || 'png';
               const buffer = Buffer.from(matches[2], 'base64');
               const fileBlob = new Blob([buffer], { type: contentType });
-              formData.append('photos[]', fileBlob, `image.${ext}`);
-              hasPhotos = true;
+              
+              const mediaFormData = new FormData();
+              mediaFormData.append('file', fileBlob, `image.${ext}`);
+              mediaFormData.append('type', 'image');
+
+              console.log('Uploading base64 mockup image to Zernio...');
+              const mediaRes = await fetch('https://zernio.com/api/v1/media', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${zernio_api_key}`,
+                },
+                body: mediaFormData
+              });
+
+              if (mediaRes.ok) {
+                const mediaData = await mediaRes.json();
+                const mediaId = mediaData.media_id || mediaData.id;
+                if (mediaId) {
+                  zernioMediaIds.push(mediaId);
+                  console.log(`Successfully uploaded base64 to Zernio. Media ID: ${mediaId}`);
+                } else {
+                  console.error('Zernio media upload succeeded but returned no ID:', mediaData);
+                }
+              } else {
+                const errText = await mediaRes.text();
+                console.error(`Zernio media upload failed with status ${mediaRes.status}:`, errText);
+              }
             }
           } else {
-            // Fetch remote/local URL
-            const imageRes = await fetch(mediaUrl);
-            if (imageRes.ok) {
-              const blob = await imageRes.blob();
-              const contentType = imageRes.headers.get('content-type') || 'image/png';
-              const ext = contentType.split('/')[1] || 'png';
-              formData.append('photos[]', blob, `image.${ext}`);
-              hasPhotos = true;
-            }
+            // It's a remote URL. Zernio supports direct mediaUrls.
+            zernioMediaUrls.push(mediaUrl);
           }
         } catch (err) {
-          console.error('Error fetching/attaching image for Upload-Post:', err);
+          console.error('Error handling/attaching image for Zernio:', err);
         }
       }
     }
 
-    const endpoint = hasPhotos 
-      ? 'https://api.upload-post.com/api/upload_photos' 
-      : 'https://api.upload-post.com/api/upload_text';
+    console.log(`Sending upload request to Zernio for platforms:`, mappedPlatforms);
 
-    console.log(`Sending upload request to Upload-Post (${endpoint}) for platforms:`, mappedPlatforms);
+    // Call Zernio API
+    const zernioPayload: any = {
+      text: postDescription,
+      platforms: mappedPlatforms
+    };
 
-    // Call Upload-Post API
-    const response = await fetch(endpoint, {
+    if (zernioMediaUrls.length > 0) {
+      zernioPayload.mediaUrls = zernioMediaUrls;
+    }
+    if (zernioMediaIds.length > 0) {
+      zernioPayload.media_ids = zernioMediaIds;
+    }
+    if (pinterestOptions) {
+      zernioPayload.pinterest_options = pinterestOptions;
+      zernioPayload.pinterestOptions = pinterestOptions; // double-write for compatibility
+    }
+
+    const response = await fetch('https://zernio.com/api/v1/posts', {
       method: 'POST',
       headers: {
-        'Authorization': `Apikey ${uploadpost_api_key}`,
+        'Authorization': `Bearer ${zernio_api_key}`,
+        'Content-Type': 'application/json'
       },
-      body: formData,
+      body: JSON.stringify(zernioPayload)
     });
 
     const responseData = await response.json();
 
-    if (!response.ok || responseData.success === false) {
-      console.error('Upload-Post publish failed:', responseData);
+    if (!response.ok || responseData.status === 'error' || responseData.success === false) {
+      console.error('Zernio publish failed:', responseData);
 
       // Log a failed post in the database
       await prisma.socialPost.create({
@@ -156,12 +183,13 @@ export async function POST(request: Request) {
       });
 
       return NextResponse.json(
-        { error: responseData.message || responseData.error || 'Failed to post through Upload-Post API' },
+        { error: responseData.message || responseData.error || 'Failed to post through Zernio API' },
         { status: response.status || 500 }
       );
     }
 
     // Save successful post record to the database
+    // Note: Zernio returns the post ID in responseData.id
     await prisma.socialPost.create({
       data: {
         productId: productId || null,
@@ -169,14 +197,14 @@ export async function POST(request: Request) {
         platform: platforms.join(', '),
         generatedContent: postContent,
         status: 'SENT',
-        ayrshareRefId: responseData.request_id || responseData.job_id || '',
+        ayrshareRefId: responseData.id || responseData.postId || '',
         triggerWords: triggerWords || 'link,store,recommendations',
       },
     });
 
     return NextResponse.json({ success: true, data: responseData });
   } catch (error: any) {
-    console.error('Upload-Post integration handler error:', error);
+    console.error('Zernio integration handler error:', error);
     return NextResponse.json({ error: error.message || 'Social publishing failed' }, { status: 500 });
   }
 }

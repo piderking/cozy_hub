@@ -54,8 +54,7 @@ interface HubSettings {
   background_color: string;
   text_color: string;
   gemini_api_key: string;
-  uploadpost_api_key: string;
-  uploadpost_username: string;
+  zernio_api_key: string;
   pinterest_board_id: string;
   amazon_tag: string;
   niche_prompt_directive: string;
@@ -76,7 +75,6 @@ export default function AdminPage() {
     triggerWord: 'cozy',
     instagramPost: '',
     pinterestPost: '',
-    xPost: '',
   });
   const [isGeneratingCollPrompt, setIsGeneratingCollPrompt] = useState(false);
   const [isGeneratingCollScene, setIsGeneratingCollScene] = useState(false);
@@ -114,8 +112,7 @@ export default function AdminPage() {
     background_color: '#0b0f17',
     text_color: '#f8fafc',
     gemini_api_key: '',
-    uploadpost_api_key: '',
-    uploadpost_username: '',
+    zernio_api_key: '',
     pinterest_board_id: '',
     amazon_tag: '',
     niche_prompt_directive: '',
@@ -154,7 +151,6 @@ export default function AdminPage() {
   const [socialDrafts, setSocialDrafts] = useState({
     instagramPost: '',
     pinterestPost: '',
-    xPost: '',
   });
 
   // UI States
@@ -400,7 +396,6 @@ export default function AdminPage() {
           ...prev,
           instagramPost: data.instagramPost || '',
           pinterestPost: data.pinterestPost || '',
-          xPost: data.xPost || '',
         }));
         showMessage('Social captions generated successfully!');
       } else {
@@ -440,7 +435,6 @@ export default function AdminPage() {
           triggerWord: 'cozy',
           instagramPost: '',
           pinterestPost: '',
-          xPost: '',
         });
         fetchCollections();
       } else {
@@ -454,7 +448,7 @@ export default function AdminPage() {
   };
 
   // Publishing Collection Social Post
-  const handlePublishCollectionSocial = async (platform: 'instagram' | 'pinterest' | 'twitter', text: string) => {
+  const handlePublishCollectionSocial = async (platform: 'instagram' | 'pinterest', text: string) => {
     if (!text.trim()) {
       showMessage('Post content is empty.', 'error');
       return;
@@ -783,7 +777,6 @@ export default function AdminPage() {
       setSocialDrafts({
         instagramPost: data.instagramPost || '',
         pinterestPost: data.pinterestPost || '',
-        xPost: data.xPost || '',
       });
 
       showMessage('AI theme title, description, and social posts generated in Panel 2 & 3!');
@@ -901,17 +894,16 @@ export default function AdminPage() {
       // Fallback social media copy if none was generated/filled in Panel 3 (FTC Compliant #ad)
       const defaultInsta = `#ad ✨ ${curatedProduct.title}\n\n${curatedProduct.customDescription || curatedProduct.rawDescription}\n\nCheck the link in our bio to find this deal! 🏠✨\n\n#cozyhome #decor #lifestyle`;
       const defaultPin = `#ad 📌 ${curatedProduct.title} - ${curatedProduct.customDescription || curatedProduct.rawDescription}\n\nPin this to save for later!`;
-      const defaultX = `#ad ✨ ${curatedProduct.title.substring(0, 50)}\n\n${(curatedProduct.customDescription || curatedProduct.rawDescription || '').substring(0, 150)}...\n\nGrab the deal here: [LINK] 🛍️`;
 
       const igContent = socialDrafts.instagramPost.trim() || defaultInsta;
       const pinContent = socialDrafts.pinterestPost.trim() || defaultPin;
-      const xContent = socialDrafts.xPost.trim() || defaultX;
 
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...curatedProduct,
+          mainImage: curatedProduct.mainImage || curatedProduct.originalProductImage, // Ensure main image is saved
           price: '', // Always blank out price
           // Save prompt, original prompt, raw description, original product image, and social posts to preserve them
           galleryImages: JSON.stringify({ 
@@ -922,7 +914,6 @@ export default function AdminPage() {
             socialDrafts: {
               instagram: igContent,
               pinterest: pinContent,
-              x: xContent,
             }
           }),
         }),
@@ -938,7 +929,6 @@ export default function AdminPage() {
       setSocialDrafts({
         instagramPost: igContent,
         pinterestPost: pinContent,
-        xPost: xContent,
       });
 
       showMessage(curatedProduct.id ? 'Product listing updated!' : 'Product listing saved to catalog!');
@@ -966,7 +956,7 @@ export default function AdminPage() {
     let originalPromptStr = '';
     let rawDescriptionStr = '';
     let originalProductImageStr = '';
-    let socialDraftsObj = { instagram: '', pinterest: '', x: '' };
+    let socialDraftsObj = { instagram: '', pinterest: '' };
 
     try { prosArr = JSON.parse(prod.pros); } catch(_) {}
     try { consArr = JSON.parse(prod.cons); } catch(_) {}
@@ -981,7 +971,6 @@ export default function AdminPage() {
           socialDraftsObj = {
             instagram: galleryData.socialDrafts.instagram || '',
             pinterest: galleryData.socialDrafts.pinterest || '',
-            x: galleryData.socialDrafts.x || '',
           };
         }
       }
@@ -1009,7 +998,6 @@ export default function AdminPage() {
     setSocialDrafts({
       instagramPost: socialDraftsObj.instagram || `${prod.title}\n\n${prod.customDescription}\n\nCheck the link in our bio to find this deal! 🏠✨\n\n#cozyhome #decor #lifestyle`,
       pinterestPost: socialDraftsObj.pinterest || `${prod.title} - ${prod.customDescription}\n\nPin this to save for later!`,
-      xPost: socialDraftsObj.x || `✨ ${prod.title.substring(0, 50)}\n\n${prod.customDescription.substring(0, 150)}...\n\nGrab the deal here: [LINK] 🛍️`,
     });
 
     setActiveTab('curator');
@@ -1075,7 +1063,7 @@ export default function AdminPage() {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  // Publish to Socials via Ayrshare (Individual)
+  // Publish to Socials via Zernio (Individual)
   const handlePublishToSocials = async (platform: string, content: string) => {
     let finalContent = content.trim();
     if (!finalContent) {
@@ -1083,8 +1071,6 @@ export default function AdminPage() {
         finalContent = `#ad ✨ ${curatedProduct.title}\n\n${curatedProduct.customDescription || curatedProduct.rawDescription}\n\nCheck the link in our bio to find this deal! 🏠✨\n\n#cozyhome #decor #lifestyle`;
       } else if (platform === 'pinterest') {
         finalContent = `#ad 📌 ${curatedProduct.title} - ${curatedProduct.customDescription || curatedProduct.rawDescription}\n\nPin this to save for later!`;
-      } else if (platform === 'twitter') {
-        finalContent = `#ad ✨ ${curatedProduct.title.substring(0, 50)}\n\n${(curatedProduct.customDescription || curatedProduct.rawDescription || '').substring(0, 150)}...\n\nGrab the deal here: [LINK] 🛍️`;
       }
     }
 
@@ -1135,7 +1121,7 @@ export default function AdminPage() {
     }
   };
 
-  // Publish to ALL Socials at once (Instagram, Pinterest, X/Twitter)
+  // Publish to ALL Socials at once (Instagram, Pinterest)
   const handlePublishToAllSocials = async () => {
     setLoading(prev => ({ ...prev, publish: true }));
     let successCount = 0;
@@ -1143,16 +1129,13 @@ export default function AdminPage() {
 
     const defaultInsta = `#ad ✨ ${curatedProduct.title}\n\n${curatedProduct.customDescription || curatedProduct.rawDescription}\n\nCheck the link in our bio to find this deal! 🏠✨\n\n#cozyhome #decor #lifestyle`;
     const defaultPin = `#ad 📌 ${curatedProduct.title} - ${curatedProduct.customDescription || curatedProduct.rawDescription}\n\nPin this to save for later!`;
-    const defaultX = `#ad ✨ ${curatedProduct.title.substring(0, 50)}\n\n${(curatedProduct.customDescription || curatedProduct.rawDescription || '').substring(0, 150)}...\n\nGrab the deal here: [LINK] 🛍️`;
 
     const platformsToPost = [];
     const igContent = socialDrafts.instagramPost.trim() || defaultInsta;
     const pinContent = socialDrafts.pinterestPost.trim() || defaultPin;
-    const xContent = socialDrafts.xPost.trim() || defaultX;
 
     if (igContent) platformsToPost.push({ name: 'instagram', content: igContent });
     if (pinContent) platformsToPost.push({ name: 'pinterest', content: pinContent });
-    if (xContent) platformsToPost.push({ name: 'twitter', content: xContent });
 
     if (platformsToPost.length === 0) {
       showMessage('No social drafts are ready to publish.', 'error');
@@ -1164,7 +1147,6 @@ export default function AdminPage() {
     setSocialDrafts({
       instagramPost: igContent,
       pinterestPost: pinContent,
-      xPost: xContent,
     });
 
     const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
@@ -1885,17 +1867,6 @@ export default function AdminPage() {
                       {copiedKey === 'manual_pin' ? 'Copied!' : 'Copy Text'}
                     </button>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.2)', padding: '8px 12px', borderRadius: '6px' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 600 }}>X (Twitter) Post</span>
-                    <button 
-                      type="button"
-                      className="glass-button secondary" 
-                      style={{ padding: '3px 8px', fontSize: '10px' }}
-                      onClick={() => handleCopyToClipboard(socialDrafts.xPost, 'manual_x')}
-                    >
-                      {copiedKey === 'manual_x' ? 'Copied!' : 'Copy Text'}
-                    </button>
-                  </div>
                 </div>
               </div>
 
@@ -1958,36 +1929,6 @@ export default function AdminPage() {
                     style={{ minHeight: '60px', fontSize: '11px', padding: '6px' }}
                     value={socialDrafts.pinterestPost}
                     onChange={(e) => setSocialDrafts(prev => ({ ...prev, pinterestPost: e.target.value }))}
-                  />
-                </div>
-
-                {/* X Area */}
-                <div style={{ background: 'rgba(0,0,0,0.15)', border: '1px solid var(--border-color)', padding: '12px', borderRadius: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--primary-color)' }}>X (Twitter) Post</span>
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                      <button 
-                        className="glass-button secondary" 
-                        style={{ padding: '3px 6px' }}
-                        onClick={() => handleCopyToClipboard(socialDrafts.xPost, 'x')}
-                      >
-                        {copiedKey === 'x' ? <Check size={10} /> : <Copy size={10} />}
-                      </button>
-                      <button 
-                        className="glass-button" 
-                        style={{ padding: '3px 8px', fontSize: '10px' }}
-                        onClick={() => handlePublishToSocials('twitter', socialDrafts.xPost)}
-                        disabled={loading.publish || !curatedProduct.id}
-                      >
-                        Post
-                      </button>
-                    </div>
-                  </div>
-                  <textarea 
-                    className="glass-input" 
-                    style={{ minHeight: '50px', fontSize: '11px', padding: '6px' }}
-                    value={socialDrafts.xPost}
-                    onChange={(e) => setSocialDrafts(prev => ({ ...prev, xPost: e.target.value }))}
                   />
                 </div>
 
@@ -2157,7 +2098,6 @@ export default function AdminPage() {
                       triggerWord: 'cozy',
                       instagramPost: '',
                       pinterestPost: '',
-                      xPost: '',
                     });
                   }
                 }}

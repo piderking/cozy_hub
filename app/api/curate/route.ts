@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
 import { getSettings } from '@/lib/settings';
+import { generateContentWithRetry } from '@/lib/gemini';
 
 // Deterministic regex parsing for Amazon Stars
 function extractStarsFromHtml(html: string): number | null {
@@ -110,8 +110,6 @@ export async function POST(request: Request) {
     // Limit text size to avoid token overflow
     const truncatedContent = contentToParse.substring(0, 120000);
 
-    const ai = new GoogleGenAI({ apiKey: gemini_api_key });
-
     const systemPrompt = `You are a professional web scraper and structured data extractor. 
 Your task is to analyze the provided raw web content (HTML or plain text) of an Amazon product page, extract key information, and return it in a clean, valid JSON format.
 Do not make up information. If a field is not found in the text, return an empty string or empty array.
@@ -146,14 +144,10 @@ Return format (must be valid JSON, no markdown codeblocks, no extra explanation)
 }
 `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [
-        { role: 'user', parts: [{ text: systemPrompt + '\n\n' + prompt }] }
-      ],
-      config: {
-        responseMimeType: 'application/json',
-      }
+    const response = await generateContentWithRetry({
+      apiKey: gemini_api_key,
+      prompt: systemPrompt + '\n\n' + prompt,
+      responseMimeType: 'application/json',
     });
 
     const responseText = response.text || '{}';

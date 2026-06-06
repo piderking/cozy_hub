@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 import { getSettings } from '@/lib/settings';
+import { generateContentWithRetry } from '@/lib/gemini';
 
 export async function POST(request: Request) {
   try {
@@ -21,22 +22,38 @@ export async function POST(request: Request) {
 
     // ACTION 1: GENERATE SCENE PROMPT FROM SELECTED PRODUCTS
     if (action === 'generate') {
-      const { products } = body; // Array of product objects: { id, title, category }
+      const { products } = body; // Array of product objects
       if (!products || !Array.isArray(products) || products.length === 0) {
         return NextResponse.json({ error: 'At least one product is required to generate a scene prompt' }, { status: 400 });
       }
 
       const productsList = products
-        .map((p, idx) => `${idx + 1}. ${p.title} (${p.category})`)
-        .join('\n');
+        .map((p, idx) => {
+          let imgUrl = p.mainImage || '';
+          if (p.galleryImages && typeof p.galleryImages === 'string') {
+            try {
+              const parsedGallery = JSON.parse(p.galleryImages);
+              if (parsedGallery.originalProductImage) {
+                imgUrl = parsedGallery.originalProductImage;
+              }
+            } catch (_) {}
+          }
+          const desc = p.customDescription || p.rawDescription || '';
+          return `${idx + 1}. Product Title: "${p.title}" (Category: ${p.category})\n   Reference Image URL: ${imgUrl}\n   Description Summary: ${desc}`;
+        })
+        .join('\n\n');
 
       const systemPrompt = `You are a professional visual art director for an aesthetic lifestyle brand named "${brand_name}".
 Your task is to write a detailed, high-quality, professional image generation prompt for Google's Imagen model.
 The prompt must describe a single, cohesive, styled environment (like a cozy bedroom, a minimalist desk setup, or a warm living room nook) that naturally blends all of these products together:
+
 ${productsList}
 
 Use the brand guidelines:
 "${niche_prompt_directive}"
+
+CRITICAL VISUAL COMPLIANCE:
+For each product in the list, analyze its description and its reference image URL. The generated prompt must describe the physical styling, materials, shape, colors, and visual details of these products as closely as possible to their reference descriptions and images. This ensures that when Google's Imagen model generates the composite scene, each product in the scene remains visually consistent and as close to its actual reference product image as possible.
 
 The prompt must describe:
 - The styled environment/furniture (e.g. a warm oak wood desk, a cozy linen-layered bed).
@@ -47,11 +64,9 @@ The prompt must describe:
 
 IMPORTANT: Output ONLY the raw prompt text. Do not write introductory words or wrap in quotes. Keep it to 1 or 2 concise descriptive sentences.`;
 
-      const promptResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: [
-          { role: 'user', parts: [{ text: systemPrompt }] }
-        ],
+      const promptResponse = await generateContentWithRetry({
+        apiKey: gemini_api_key,
+        prompt: systemPrompt
       });
 
       const detailedScenePrompt = promptResponse.text?.trim() || `Professional catalog interior design photography of a cozy, styled space with these items arranged beautifully, warm soft lighting, photorealistic.`;
