@@ -4,6 +4,6 @@
     "buildCommand": "DATABASE_URL=file:./dev.db npx prisma generate && npm run build"
   },
   "deploy": {
-    "startCommand": "npx prisma db push && npm run start"
+    "startCommand": "if [ -d \"/app/data\" ]; then export DATABASE_URL=\"file:/app/data/dev.db\"; fi && npx prisma db push && npm run start"
   }
 }
