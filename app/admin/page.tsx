@@ -19,7 +19,13 @@ import {
   Eye,
   FileText,
   Share2,
-  LogOut
+  LogOut,
+  Library,
+  Video,
+  MessageSquare,
+  Play,
+  RefreshCw,
+  Download
 } from 'lucide-react';
 import styles from './admin.module.css';
 
@@ -56,8 +62,44 @@ interface HubSettings {
 }
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<'listings' | 'curator' | 'settings'>('listings');
+  const [activeTab, setActiveTab] = useState<'listings' | 'curator' | 'settings' | 'collections' | 'influencer' | 'responder'>('listings');
   
+  // New States for AI Collections
+  const [collections, setCollections] = useState<any[]>([]);
+  const [isCreatingCollection, setIsCreatingCollection] = useState(false);
+  const [collectionForm, setCollectionForm] = useState({
+    title: '',
+    description: '',
+    selectedProductIds: [] as string[],
+    scenePrompt: '',
+    sceneImage: '',
+    triggerWord: 'cozy',
+    instagramPost: '',
+    pinterestPost: '',
+    xPost: '',
+  });
+  const [isGeneratingCollPrompt, setIsGeneratingCollPrompt] = useState(false);
+  const [isGeneratingCollScene, setIsGeneratingCollScene] = useState(false);
+  const [isGeneratingCollCopy, setIsGeneratingCollCopy] = useState(false);
+  const [isPublishingColl, setIsPublishingColl] = useState(false);
+  const [collLoading, setCollLoading] = useState(false);
+
+  // New States for Influencer Video Scripts
+  const [influencerProducts, setInfluencerProducts] = useState<string[]>([]);
+  const [influencerScript, setInfluencerScript] = useState<any | null>(null);
+  const [isGeneratingScript, setIsGeneratingScript] = useState(false);
+
+  // New States for Auto-Responder Comment Logs
+  const [socialPosts, setSocialPosts] = useState<any[]>([]);
+  const [interactionLogs, setInteractionLogs] = useState<any[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [simForm, setSimForm] = useState({
+    socialPostId: '',
+    username: 'cozy_critic',
+    commentText: 'link'
+  });
+  const [isSimulating, setIsSimulating] = useState(false);
+
   // Auth State
   const [authStatus, setAuthStatus] = useState<'loading' | 'needs_setup' | 'needs_login' | 'authorized'>('loading');
   const [passwordInput, setPasswordInput] = useState('');
@@ -237,6 +279,357 @@ export default function AdminPage() {
       setLoading(prev => ({ ...prev, products: false }));
     }
   };
+
+  // New Tab Hooks and Observers
+  useEffect(() => {
+    if (authStatus === 'authorized') {
+      if (activeTab === 'collections') {
+        fetchCollections();
+      } else if (activeTab === 'responder') {
+        fetchResponderData();
+      }
+    }
+  }, [activeTab, authStatus]);
+
+  // AI Collections Fetching & CRUD
+  const fetchCollections = async () => {
+    try {
+      const res = await fetch('/api/collections');
+      if (res.ok) {
+        const data = await res.json();
+        setCollections(data.collections || []);
+      }
+    } catch (err) {
+      console.error('Error fetching collections:', err);
+    }
+  };
+
+  const handleDeleteCollection = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this collection?')) return;
+    try {
+      const res = await fetch(`/api/collections/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        showMessage('Collection deleted successfully!');
+        fetchCollections();
+      } else {
+        const data = await res.json();
+        showMessage(data.error || 'Failed to delete collection', 'error');
+      }
+    } catch (err: any) {
+      showMessage(err.message, 'error');
+    }
+  };
+
+  // Generating Collection Prompt
+  const handleGenerateCollectionPrompt = async () => {
+    if (collectionForm.selectedProductIds.length === 0) {
+      showMessage('Please select at least one product for the collection.', 'error');
+      return;
+    }
+    setIsGeneratingCollPrompt(true);
+    try {
+      const selectedProducts = products.filter(p => collectionForm.selectedProductIds.includes(p.id));
+      const res = await fetch('/api/generate-collection-scene', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'generate', products: selectedProducts }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCollectionForm(prev => ({ ...prev, scenePrompt: data.prompt }));
+        showMessage('AI Scene prompt generated successfully!');
+      } else {
+        showMessage(data.error || 'Failed to generate prompt', 'error');
+      }
+    } catch (err: any) {
+      showMessage(err.message, 'error');
+    } finally {
+      setIsGeneratingCollPrompt(false);
+    }
+  };
+
+  // Generating Collection Blended Scene Mockup
+  const handleGenerateCollectionScene = async () => {
+    if (!collectionForm.scenePrompt) {
+      showMessage('Please generate or enter an AI Scene prompt first.', 'error');
+      return;
+    }
+    setIsGeneratingCollScene(true);
+    try {
+      const res = await fetch('/api/generate-collection-scene', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'mockup', prompt: collectionForm.scenePrompt }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCollectionForm(prev => ({ ...prev, sceneImage: data.imageUrl }));
+        showMessage('AI Scene image generated successfully!');
+      } else {
+        showMessage(data.error || 'Failed to generate scene image', 'error');
+      }
+    } catch (err: any) {
+      showMessage(err.message, 'error');
+    } finally {
+      setIsGeneratingCollScene(false);
+    }
+  };
+
+  // Generating Collection Social Copy
+  const handleGenerateCollectionCopy = async () => {
+    if (!collectionForm.title || !collectionForm.description) {
+      showMessage('Title and Description are required to generate copy.', 'error');
+      return;
+    }
+    setIsGeneratingCollCopy(true);
+    try {
+      const selectedProducts = products.filter(p => collectionForm.selectedProductIds.includes(p.id));
+      const res = await fetch('/api/collections/generate-copy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: collectionForm.title,
+          description: collectionForm.description,
+          products: selectedProducts,
+          triggerWord: collectionForm.triggerWord,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCollectionForm(prev => ({
+          ...prev,
+          instagramPost: data.instagramPost || '',
+          pinterestPost: data.pinterestPost || '',
+          xPost: data.xPost || '',
+        }));
+        showMessage('Social captions generated successfully!');
+      } else {
+        showMessage(data.error || 'Failed to generate copy', 'error');
+      }
+    } catch (err: any) {
+      showMessage(err.message, 'error');
+    } finally {
+      setIsGeneratingCollCopy(false);
+    }
+  };
+
+  // Saving Collection
+  const handleSaveCollection = async () => {
+    const { title, description, selectedProductIds, sceneImage } = collectionForm;
+    if (!title || !description || selectedProductIds.length === 0 || !sceneImage) {
+      showMessage('Please complete Title, Description, select products, and generate the AI Scene Image.', 'error');
+      return;
+    }
+    setCollLoading(true);
+    try {
+      const res = await fetch('/api/collections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, description, products: selectedProductIds, sceneImage }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showMessage('Collection saved successfully!');
+        setIsCreatingCollection(false);
+        setCollectionForm({
+          title: '',
+          description: '',
+          selectedProductIds: [],
+          scenePrompt: '',
+          sceneImage: '',
+          triggerWord: 'cozy',
+          instagramPost: '',
+          pinterestPost: '',
+          xPost: '',
+        });
+        fetchCollections();
+      } else {
+        showMessage(data.error || 'Failed to save collection', 'error');
+      }
+    } catch (err: any) {
+      showMessage(err.message, 'error');
+    } finally {
+      setCollLoading(false);
+    }
+  };
+
+  // Publishing Collection Social Post
+  const handlePublishCollectionSocial = async (platform: 'instagram' | 'pinterest' | 'twitter', text: string) => {
+    if (!text.trim()) {
+      showMessage('Post content is empty.', 'error');
+      return;
+    }
+    setIsPublishingColl(true);
+    try {
+      const payload = {
+        collectionId: undefined, // Send if we have it, otherwise fallback
+        postContent: text,
+        platforms: [platform],
+        mediaUrls: collectionForm.sceneImage ? [collectionForm.sceneImage] : undefined,
+        triggerWords: collectionForm.triggerWord,
+      };
+      const res = await fetch('/api/publish-social', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showMessage(`Successfully posted to ${platform} via Upload-Post!`);
+      } else {
+        showMessage(data.error || 'Publishing failed', 'error');
+      }
+    } catch (err: any) {
+      showMessage(err.message, 'error');
+    } finally {
+      setIsPublishingColl(false);
+    }
+  };
+
+  // Generate Influencer script
+  const handleGenerateInfluencerScript = async () => {
+    if (influencerProducts.length === 0) {
+      showMessage('Please select at least one product for script generation.', 'error');
+      return;
+    }
+    setIsGeneratingScript(true);
+    try {
+      const selectedProducts = products.filter(p => influencerProducts.includes(p.id));
+      const res = await fetch('/api/generate-reel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ products: selectedProducts }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setInfluencerScript(data);
+        showMessage('Influencer video script package generated successfully!');
+      } else {
+        showMessage(data.error || 'Failed to generate script', 'error');
+      }
+    } catch (err: any) {
+      showMessage(err.message, 'error');
+    } finally {
+      setIsGeneratingScript(false);
+    }
+  };
+
+  // Fetch responder data (posts & logs)
+  const fetchResponderData = async () => {
+    setLogsLoading(true);
+    try {
+      // Fetch posts
+      const resPosts = await fetch('/api/social-logs?type=posts');
+      if (resPosts.ok) {
+        const data = await resPosts.json();
+        setSocialPosts(data.posts || []);
+        if (data.posts && data.posts.length > 0 && !simForm.socialPostId) {
+          setSimForm(prev => ({ ...prev, socialPostId: data.posts[0].id }));
+        }
+      }
+      // Fetch logs
+      const resLogs = await fetch('/api/social-logs');
+      if (resLogs.ok) {
+        const data = await resLogs.json();
+        setInteractionLogs(data.logs || []);
+      }
+    } catch (err) {
+      console.error('Error fetching responder data:', err);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  // Update triggers
+  const handleUpdateTriggerWords = async (socialPostId: string, triggerWords: string) => {
+    try {
+      const res = await fetch('/api/social-logs', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ socialPostId, triggerWords }),
+      });
+      if (res.ok) {
+        showMessage('Trigger words updated successfully!');
+        fetchResponderData();
+      } else {
+        const data = await res.json();
+        showMessage(data.error || 'Failed to update trigger words', 'error');
+      }
+    } catch (err: any) {
+      showMessage(err.message, 'error');
+    }
+  };
+
+  // Run webhook simulator
+  const handleSimulateTrigger = async () => {
+    if (!simForm.socialPostId) {
+      showMessage('Please select a social post in the simulator.', 'error');
+      return;
+    }
+    setIsSimulating(true);
+    try {
+      const res = await fetch('/api/webhooks/social-comment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'comment',
+          text: simForm.commentText,
+          user: simForm.username,
+          platform: 'instagram',
+          socialPostId: simForm.socialPostId,
+          isSimulation: true,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (data.simulated && data.responseText) {
+          showMessage(`Simulation success! Auto-replied: "${data.responseText}" (Trigger matched: "${data.matchedTrigger}")`);
+        } else {
+          showMessage(`Simulation processed: "${data.message || 'No trigger word matched'}"`);
+        }
+        fetchResponderData(); // reload logs
+      } else {
+        const data = await res.json();
+        showMessage(data.error || 'Simulation failed', 'error');
+      }
+    } catch (err: any) {
+      showMessage(err.message, 'error');
+    } finally {
+      setIsSimulating(false);
+    }
+  };
+
+  const handleClearLogs = async () => {
+    if (!confirm('Are you sure you want to clear all interaction logs?')) return;
+    try {
+      const res = await fetch('/api/social-logs?clearAll=true', { method: 'DELETE' });
+      if (res.ok) {
+        showMessage('All logs cleared successfully.');
+        fetchResponderData();
+      } else {
+        const data = await res.json();
+        showMessage(data.error || 'Failed to clear logs', 'error');
+      }
+    } catch (err: any) {
+      showMessage(err.message, 'error');
+    }
+  };
+
+  const handleDeleteLog = async (id: string) => {
+    try {
+      const res = await fetch(`/api/social-logs?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        showMessage('Log entry deleted.');
+        fetchResponderData();
+      } else {
+        const data = await res.json();
+        showMessage(data.error || 'Failed to delete log', 'error');
+      }
+    } catch (err: any) {
+      showMessage(err.message, 'error');
+    }
+  };
+
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -916,6 +1309,24 @@ export default function AdminPage() {
             onClick={() => setActiveTab('curator')}
           >
             <Sparkles size={16} /> Curator Panels
+          </button>
+          <button 
+            className={`${styles.tabBtn} ${activeTab === 'collections' ? styles.activeTabBtn : ''}`}
+            onClick={() => setActiveTab('collections')}
+          >
+            <Library size={16} /> AI Collections
+          </button>
+          <button 
+            className={`${styles.tabBtn} ${activeTab === 'influencer' ? styles.activeTabBtn : ''}`}
+            onClick={() => setActiveTab('influencer')}
+          >
+            <Video size={16} /> Influencer Panel
+          </button>
+          <button 
+            className={`${styles.tabBtn} ${activeTab === 'responder' ? styles.activeTabBtn : ''}`}
+            onClick={() => setActiveTab('responder')}
+          >
+            <MessageSquare size={16} /> Auto-Responder Logs
           </button>
           <button 
             className={`${styles.tabBtn} ${activeTab === 'settings' ? styles.activeTabBtn : ''}`}
@@ -1692,52 +2103,18 @@ export default function AdminPage() {
                   </p>
                 </div>
 
-                {/* API Credentials Block */}
+                {/* Store Config Block */}
                 <div className={`glass-panel ${styles.settingsCard}`} style={{ gridColumn: 'span 2' }}>
-                  <h2>API Keys & Credentials</h2>
-                  <div className={styles.formRow}>
-                    <div className={styles.formGroup}>
-                      <label>Gemini API Key (Google AI Studio)</label>
-                      <input 
-                        type="password" 
-                        className="glass-input" 
-                        value={settings.gemini_api_key}
-                        onChange={(e) => setSettings(prev => ({ ...prev, gemini_api_key: e.target.value }))}
-                        placeholder="AI Studio API Key"
-                      />
-                    </div>
-                    <div className={styles.formGroup}>
-                      <label>Upload-Post API Key</label>
-                      <input 
-                        type="password" 
-                        className="glass-input" 
-                        value={settings.uploadpost_api_key}
-                        onChange={(e) => setSettings(prev => ({ ...prev, uploadpost_api_key: e.target.value }))}
-                        placeholder="Upload-Post API Key"
-                      />
-                    </div>
-                  </div>
-                  <div className={styles.formRow} style={{ marginTop: '-10px' }}>
-                    <div className={styles.formGroup}>
-                      <label>Upload-Post Profile Username</label>
-                      <input 
-                        type="text" 
-                        className="glass-input" 
-                        value={settings.uploadpost_username}
-                        onChange={(e) => setSettings(prev => ({ ...prev, uploadpost_username: e.target.value }))}
-                        placeholder="e.g. cozy_hub_profile"
-                      />
-                    </div>
-                    <div className={styles.formGroup}>
-                      <label>Pinterest Board ID (For Pinterest posting)</label>
-                      <input 
-                        type="text" 
-                        className="glass-input" 
-                        value={settings.pinterest_board_id}
-                        onChange={(e) => setSettings(prev => ({ ...prev, pinterest_board_id: e.target.value }))}
-                        placeholder="e.g. 107579166..."
-                      />
-                    </div>
+                  <h2>Store Integrations & Directives</h2>
+                  <div className={styles.formGroup}>
+                    <label>Pinterest Board ID (For Pinterest posting)</label>
+                    <input 
+                      type="text" 
+                      className="glass-input" 
+                      value={settings.pinterest_board_id}
+                      onChange={(e) => setSettings(prev => ({ ...prev, pinterest_board_id: e.target.value }))}
+                      placeholder="e.g. 107579166..."
+                    />
                   </div>
                   <div className={styles.formGroup}>
                     <label>Gemini Copywriter Persona Directive (Niche Prompt Instructions)</label>
@@ -1758,6 +2135,609 @@ export default function AdminPage() {
                 </div>
               </form>
             )}
+          </div>
+        )}
+
+        {/* AI Collections Tab */}
+        {activeTab === 'collections' && (
+          <div className="animated-fade-in">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h2>AI Scene Collections</h2>
+              <button 
+                className="glass-button" 
+                onClick={() => {
+                  setIsCreatingCollection(!isCreatingCollection);
+                  if (!isCreatingCollection) {
+                    setCollectionForm({
+                      title: '',
+                      description: '',
+                      selectedProductIds: [],
+                      scenePrompt: '',
+                      sceneImage: '',
+                      triggerWord: 'cozy',
+                      instagramPost: '',
+                      pinterestPost: '',
+                      xPost: '',
+                    });
+                  }
+                }}
+              >
+                {isCreatingCollection ? 'Back to Collections' : <><Plus size={16} /> Create Collection</>}
+              </button>
+            </div>
+
+            {!isCreatingCollection ? (
+              // Collections List
+              collections.length === 0 ? (
+                <div className="glass-panel" style={{ padding: '60px 20px', textAlign: 'center' }}>
+                  <Library size={48} className="text-muted" style={{ margin: '0 auto 16px' }} />
+                  <h3>No Collections Yet</h3>
+                  <p className="text-muted" style={{ marginTop: '8px' }}>
+                    Click "Create Collection" to bundle multiple products into an AI generated scene.
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px' }}>
+                  {collections.map((col) => (
+                    <div key={col.id} className="glass-card" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ height: '180px', position: 'relative', background: 'rgba(0, 0, 0, 0.2)', borderBottom: '1px solid var(--border-color)' }}>
+                        {col.sceneImage ? (
+                          <img src={col.sceneImage} alt={col.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                            <ImageIcon size={32} className="text-muted" />
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                        <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>{col.title}</h3>
+                        <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: '1.5', flex: 1, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                          {col.description}
+                        </p>
+                        <div style={{ marginTop: '12px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                          <strong>Products:</strong> {col.products?.length || 0} items
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                          <a 
+                            href={`/collections/${col.slug}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="glass-button secondary"
+                            style={{ flex: 1, display: 'inline-flex', justifyContent: 'center', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '8px 12px' }}
+                          >
+                            <Eye size={14} /> View Page
+                          </a>
+                          <button 
+                            className="glass-button" 
+                            style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.2)' }}
+                            onClick={() => handleDeleteCollection(col.id)}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : (
+              // Create Collection Form
+              <div className={styles.curatorGrid}>
+                {/* Left Column: Form Details & Products */}
+                <div className="glass-panel" style={{ padding: '24px' }}>
+                  <h3 style={{ fontSize: '18px', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>Collection Configurations</h3>
+                  <div className={styles.formGroup}>
+                    <label>Collection Title</label>
+                    <input 
+                      type="text" 
+                      className="glass-input" 
+                      placeholder="e.g. Vanilla Cozy Dorm Room Setup" 
+                      value={collectionForm.title}
+                      onChange={(e) => setCollectionForm(prev => ({ ...prev, title: e.target.value }))}
+                    />
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label>Collection Description</label>
+                    <textarea 
+                      className="glass-input" 
+                      style={{ minHeight: '100px', resize: 'vertical' }}
+                      placeholder="Describe the aesthetic and purpose of this scene bundle..."
+                      value={collectionForm.description}
+                      onChange={(e) => setCollectionForm(prev => ({ ...prev, description: e.target.value }))}
+                    />
+                  </div>
+
+                  <div className={styles.formGroup}>
+                    <label>Instagram Trigger Word (Case-insensitive keyword to auto-reply link)</label>
+                    <input 
+                      type="text" 
+                      className="glass-input" 
+                      placeholder="e.g. cozy, room, desk" 
+                      value={collectionForm.triggerWord}
+                      onChange={(e) => setCollectionForm(prev => ({ ...prev, triggerWord: e.target.value }))}
+                    />
+                  </div>
+
+                  <div className={styles.formGroup}>
+                    <label style={{ marginBottom: '12px' }}>Select Products to Group in this Scene (Min: 1)</label>
+                    <div style={{ maxHeight: '250px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '12px', background: 'rgba(0, 0, 0, 0.1)' }}>
+                      {products.map((p) => {
+                        const isChecked = collectionForm.selectedProductIds.includes(p.id);
+                        return (
+                          <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px', cursor: 'pointer', borderRadius: '4px', background: isChecked ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
+                            <input 
+                              type="checkbox" 
+                              checked={isChecked}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setCollectionForm(prev => ({
+                                  ...prev,
+                                  selectedProductIds: checked 
+                                    ? [...prev.selectedProductIds, p.id]
+                                    : prev.selectedProductIds.filter(id => id !== p.id)
+                                }));
+                              }}
+                            />
+                            {p.mainImage && <img src={p.mainImage} alt="" style={{ width: '30px', height: '30px', objectFit: 'cover', borderRadius: '4px' }} />}
+                            <span style={{ fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.title}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column: AI Scene Image & Social Captions */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  <div className="glass-panel" style={{ padding: '24px' }}>
+                    <h3 style={{ fontSize: '18px', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>AI Scene Generator</h3>
+                    
+                    {collectionForm.sceneImage ? (
+                      <div style={{ width: '100%', marginBottom: '20px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                        <img src={collectionForm.sceneImage} alt="Scene Mockup" style={{ width: '100%', display: 'block' }} />
+                      </div>
+                    ) : (
+                      <div style={{ height: '220px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '2px dashed var(--border-color)', borderRadius: '8px', marginBottom: '20px', background: 'rgba(0,0,0,0.1)' }}>
+                        <ImageIcon size={48} className="text-muted" style={{ marginBottom: '8px' }} />
+                        <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>AI Scene Image will display here</span>
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+                      <button 
+                        className="glass-button" 
+                        style={{ flex: 1 }}
+                        onClick={handleGenerateCollectionPrompt}
+                        disabled={isGeneratingCollPrompt || collectionForm.selectedProductIds.length === 0}
+                      >
+                        {isGeneratingCollPrompt ? <Loader2 className="spinner" size={16} /> : 'Generate Scene Prompt'}
+                      </button>
+                      <button 
+                        className="glass-button"
+                        style={{ flex: 1 }}
+                        onClick={handleGenerateCollectionScene}
+                        disabled={isGeneratingCollScene || !collectionForm.scenePrompt}
+                      >
+                        {isGeneratingCollScene ? <Loader2 className="spinner" size={16} /> : 'Generate AI Image'}
+                      </button>
+                    </div>
+
+                    {collectionForm.scenePrompt && (
+                      <div className={styles.formGroup}>
+                        <label>AI Prompt Directive</label>
+                        <textarea 
+                          className="glass-input" 
+                          style={{ minHeight: '80px', fontSize: '13px' }}
+                          value={collectionForm.scenePrompt}
+                          onChange={(e) => setCollectionForm(prev => ({ ...prev, scenePrompt: e.target.value }))}
+                        />
+                      </div>
+                    )}
+
+                    {collectionForm.sceneImage && (
+                      <button 
+                        className="glass-button secondary" 
+                        style={{ width: '100%', background: 'var(--primary-color)', color: '#fff', border: 'none' }}
+                        onClick={handleSaveCollection}
+                        disabled={collLoading}
+                      >
+                        {collLoading ? <Loader2 className="spinner" size={16} /> : <><Save size={16} /> Save Collection</>}
+                      </button>
+                    )}
+                  </div>
+
+                  {collectionForm.sceneImage && (
+                    <div className="glass-panel" style={{ padding: '24px' }}>
+                      <h3 style={{ fontSize: '18px', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>Social Content & Publish</h3>
+                      
+                      <button 
+                        className="glass-button" 
+                        style={{ width: '100%', marginBottom: '20px' }}
+                        onClick={handleGenerateCollectionCopy}
+                        disabled={isGeneratingCollCopy}
+                      >
+                        {isGeneratingCollCopy ? <Loader2 className="spinner" size={16} /> : 'Generate Social Copy'}
+                      </button>
+
+                      {collectionForm.instagramPost && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                          <div className={styles.previewSection}>
+                            <h3>Instagram Caption (DM Auto-Responder Enabled)</h3>
+                            <div className={styles.previewContent}>
+                              {collectionForm.instagramPost}
+                              <div className={styles.copyOverlay}>
+                                <button className="glass-button secondary" onClick={() => navigator.clipboard.writeText(collectionForm.instagramPost)}>
+                                  <Copy size={12} />
+                                </button>
+                              </div>
+                            </div>
+                            <button 
+                              className="glass-button" 
+                              style={{ width: '100%', marginTop: '8px' }}
+                              onClick={() => handlePublishCollectionSocial('instagram', collectionForm.instagramPost)}
+                              disabled={isPublishingColl}
+                            >
+                              Publish Instagram Reel/Post
+                            </button>
+                          </div>
+
+                          <div className={styles.previewSection}>
+                            <h3>Pinterest Pin Description (Direct landing page link embedded)</h3>
+                            <div className={styles.previewContent}>
+                              {collectionForm.pinterestPost}
+                              <div className={styles.copyOverlay}>
+                                <button className="glass-button secondary" onClick={() => navigator.clipboard.writeText(collectionForm.pinterestPost)}>
+                                  <Copy size={12} />
+                                </button>
+                              </div>
+                            </div>
+                            <button 
+                              className="glass-button" 
+                              style={{ width: '100%', marginTop: '8px' }}
+                              onClick={() => handlePublishCollectionSocial('pinterest', collectionForm.pinterestPost)}
+                              disabled={isPublishingColl}
+                            >
+                              Publish Pinterest Pin
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Influencer Panel Tab */}
+        {activeTab === 'influencer' && (
+          <div className="animated-fade-in">
+            <h2>Influencer Video Planner & Script Generator</h2>
+            <p className="text-muted" style={{ marginBottom: '24px' }}>
+              Select catalog products and generate aesthetic short-form video hooks, visual outlines, script/voiceover drafts, and suggested trigger words.
+            </p>
+
+            <div className={styles.curatorGrid}>
+              {/* Left Column: Product Selector */}
+              <div className="glass-panel" style={{ padding: '24px' }}>
+                <h3 style={{ fontSize: '18px', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>1. Select Products</h3>
+                <div style={{ maxHeight: '450px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '12px', background: 'rgba(0, 0, 0, 0.1)' }}>
+                  {products.map((p) => {
+                    const isChecked = influencerProducts.includes(p.id);
+                    return (
+                      <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', cursor: 'pointer', borderRadius: '4px', background: isChecked ? 'rgba(255,255,255,0.03)' : 'transparent', marginBottom: '4px' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={isChecked}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setInfluencerProducts(prev => checked 
+                              ? [...prev, p.id]
+                              : prev.filter(id => id !== p.id)
+                            );
+                          }}
+                        />
+                        {p.mainImage && <img src={p.mainImage} alt="" style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }} />}
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 600 }}>{p.title}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{p.category}</span>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <button 
+                  className="glass-button" 
+                  style={{ width: '100%', marginTop: '20px', background: 'var(--primary-color)', color: '#fff', border: 'none' }}
+                  onClick={handleGenerateInfluencerScript}
+                  disabled={isGeneratingScript || influencerProducts.length === 0}
+                >
+                  {isGeneratingScript ? <Loader2 className="spinner" size={16} /> : <><Sparkles size={16} /> Generate Video Outline</>}
+                </button>
+              </div>
+
+              {/* Right Column: Script Output */}
+              <div className="glass-panel" style={{ padding: '24px' }}>
+                <h3 style={{ fontSize: '18px', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>2. Generated Video Script</h3>
+                
+                {isGeneratingScript ? (
+                  <div style={{ height: '300px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                    <Loader2 className="spinner" size={48} style={{ marginBottom: '16px' }} />
+                    <p className="text-muted">Gemini is structuring your aesthetic video outlines...</p>
+                  </div>
+                ) : influencerScript ? (
+                  <div className="animated-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                    <div>
+                      <span style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 800, color: 'var(--primary-color)', display: 'block', marginBottom: '4px' }}>Reel Concept Theme</span>
+                      <h4 style={{ fontSize: '20px', fontWeight: 800 }}>{influencerScript.themeTitle}</h4>
+                    </div>
+
+                    <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '16px', border: '1px solid var(--border-color)', borderRadius: '12px' }}>
+                      <h5 style={{ fontWeight: 700, marginBottom: '10px', color: 'var(--primary-color)', fontSize: '13px' }}>Suggested Comment Trigger Keywords</h5>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        {influencerScript.suggestedTriggers?.map((trig: string) => (
+                          <span key={trig} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: 600 }}>
+                            {trig}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <h5 style={{ fontWeight: 700, marginBottom: '12px', fontSize: '14px' }}>Video Hook Options</h5>
+                      <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {influencerScript.hookOptions?.map((hook: string, index: number) => (
+                          <li key={index} style={{ fontSize: '13px', background: 'rgba(0,0,0,0.15)', border: '1px solid var(--border-color)', padding: '12px', borderRadius: '8px', position: 'relative' }}>
+                            <strong>Hook {index + 1}:</strong> {hook}
+                            <button 
+                              style={{ position: 'absolute', top: '10px', right: '10px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                              onClick={() => navigator.clipboard.writeText(hook)}
+                              title="Copy Hook"
+                            >
+                              <Copy size={12} />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div>
+                      <h5 style={{ fontWeight: 700, marginBottom: '12px', fontSize: '14px' }}>Visual Scene-by-Scene Script Outlines</h5>
+                      <div style={{ border: '1px solid var(--border-color)', borderRadius: '12px', overflow: 'hidden' }}>
+                        {influencerScript.scenes?.map((scene: any) => (
+                          <div key={scene.sceneNumber} style={{ borderBottom: scene.sceneNumber !== influencerScript.scenes.length ? '1px solid var(--border-color)' : 'none', padding: '16px', background: 'rgba(0,0,0,0.1)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '12px' }}>
+                              <span style={{ fontWeight: 700, color: 'var(--primary-color)' }}>Scene {scene.sceneNumber}</span>
+                              <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>Overlay: "{scene.onScreenText}"</span>
+                            </div>
+                            <p style={{ fontSize: '13px', marginBottom: '6px' }}><strong>Visual:</strong> {scene.visualDirective}</p>
+                            <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.85)' }}><strong>Audio/Voice:</strong> "{scene.voiceoverScript}"</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <h5 style={{ fontWeight: 700, marginBottom: '6px', fontSize: '14px' }}>Production & Aesthetic Tips</h5>
+                      <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: '1.6' }}>{influencerScript.aestheticTips}</p>
+                    </div>
+
+                    {influencerScript.captionDraft && (
+                      <div className={styles.previewSection}>
+                        <h3>Instagram Caption Draft (Ready to Post)</h3>
+                        <div className={styles.previewContent}>
+                          {influencerScript.captionDraft}
+                          <div className={styles.copyOverlay}>
+                            <button className="glass-button secondary" onClick={() => navigator.clipboard.writeText(influencerScript.captionDraft)}>
+                              <Copy size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '14px' }}>
+                    Select products and click "Generate Video Outline" to generate video scripts.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Comment Auto-Responder & Logs Tab */}
+        {activeTab === 'responder' && (
+          <div className="animated-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+            <h2>Instagram Comment Auto-Responder Logs & Triggers</h2>
+            <p className="text-muted" style={{ marginTop: '-24px', marginBottom: '10px' }}>
+              Define trigger keywords for sent posts (e.g. comments with "link" trigger direct responses), test with the simulation card, and monitor live comment interaction logs.
+            </p>
+
+            <div className={styles.curatorGrid}>
+              {/* Left Column: Triggers Settings */}
+              <div className="glass-panel" style={{ padding: '24px' }}>
+                <h3 style={{ fontSize: '18px', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>1. Post Trigger Settings</h3>
+                {logsLoading ? (
+                  <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Loader2 className="spinner" size={24} />
+                  </div>
+                ) : socialPosts.length === 0 ? (
+                  <p className="text-muted" style={{ fontStyle: 'italic', fontSize: '13px', textAlign: 'center', padding: '20px' }}>No sent social posts found. Try publishing products or collections first.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '450px', overflowY: 'auto' }}>
+                    {socialPosts.map((post) => {
+                      const linkName = post.product ? `Product: {post.product.title}` : (post.collection ? `Collection: {post.collection.title}` : 'Cozy Hub');
+                      const linkTitle = post.product ? post.product.title : (post.collection ? post.collection.title : 'Cozy Hub');
+                      return (
+                        <div key={post.id} style={{ background: 'rgba(0,0,0,0.15)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 600, color: 'var(--primary-color)', marginBottom: '8px' }}>
+                            <span>Platform: {post.platform.toUpperCase()}</span>
+                            <span>Ref ID: {post.ayrshareRefId || 'N/A'}</span>
+                          </div>
+                          <p style={{ fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>{linkTitle}</p>
+                          <p style={{ fontSize: '12px', color: 'var(--text-muted)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginBottom: '12px' }}>
+                            "{post.generatedContent}"
+                          </p>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <input 
+                              type="text" 
+                              defaultValue={post.triggerWords || 'link,store,recommendations'}
+                              className="glass-input"
+                              placeholder="Triggers (comma-separated)"
+                              style={{ flex: 1, padding: '6px 12px', fontSize: '13px' }}
+                              id={`trig-input-${post.id}`}
+                            />
+                            <button 
+                              className="glass-button secondary" 
+                              style={{ padding: '6px 12px', fontSize: '12px' }}
+                              onClick={() => {
+                                const inputVal = (document.getElementById(`trig-input-${post.id}`) as HTMLInputElement)?.value;
+                                handleUpdateTriggerWords(post.id, inputVal);
+                              }}
+                            >
+                              Update Triggers
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Right Column: Webhook Simulator */}
+              <div className="glass-panel" style={{ padding: '24px' }}>
+                <h3 style={{ fontSize: '18px', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>2. Comment Webhook Simulator</h3>
+                <div className="authForm" style={{ gap: '16px' }}>
+                  <div className={styles.formGroup} style={{ marginBottom: '12px' }}>
+                    <label>Select Social Post to Target</label>
+                    <select 
+                      className={styles.filterSelect}
+                      style={{ width: '100%', padding: '10px' }}
+                      value={simForm.socialPostId}
+                      onChange={(e) => setSimForm(prev => ({ ...prev, socialPostId: e.target.value }))}
+                    >
+                      <option value="">-- Choose Post --</option>
+                      {socialPosts.map((post) => {
+                        const linkName = post.product ? `Product: ${post.product.title.substring(0,30)}` : (post.collection ? `Collection: ${post.collection.title.substring(0,30)}` : 'Post');
+                        return (
+                          <option key={post.id} value={post.id}>
+                            [{post.platform}] {linkName} ({post.ayrshareRefId ? `Ref: ${post.ayrshareRefId.substring(0,6)}` : 'No Ref'})
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                  
+                  <div className={styles.formGroup} style={{ marginBottom: '12px' }}>
+                    <label>Mock Username</label>
+                    <input 
+                      type="text" 
+                      className="glass-input" 
+                      placeholder="e.g. cozy_room_critic"
+                      value={simForm.username}
+                      onChange={(e) => setSimForm(prev => ({ ...prev, username: e.target.value }))}
+                    />
+                  </div>
+
+                  <div className={styles.formGroup} style={{ marginBottom: '16px' }}>
+                    <label>Mock Comment Text (Includes trigger word to trigger auto-reply)</label>
+                    <input 
+                      type="text" 
+                      className="glass-input" 
+                      placeholder="e.g. send link please!"
+                      value={simForm.commentText}
+                      onChange={(e) => setSimForm(prev => ({ ...prev, commentText: e.target.value }))}
+                    />
+                  </div>
+
+                  <button 
+                    className="glass-button" 
+                    style={{ width: '100%', background: 'var(--primary-color)', color: '#fff', border: 'none' }}
+                    onClick={handleSimulateTrigger}
+                    disabled={isSimulating || !simForm.socialPostId}
+                  >
+                    {isSimulating ? <Loader2 className="spinner" size={16} /> : <><Play size={16} /> Run Mock Webhook Test</>}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Row: Interaction Logs Table */}
+            <div className="glass-panel" style={{ padding: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
+                <h3 style={{ fontSize: '18px', margin: 0 }}>3. Interaction Logs History</h3>
+                {interactionLogs.length > 0 && (
+                  <button className="glass-button" style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.2)' }} onClick={handleClearLogs}>
+                    Clear Interaction History
+                  </button>
+                )}
+              </div>
+
+              {logsLoading ? (
+                <div style={{ height: '100px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Loader2 className="spinner" size={24} />
+                </div>
+              ) : interactionLogs.length === 0 ? (
+                <p className="text-muted" style={{ textAlign: 'center', padding: '40px', fontStyle: 'italic', fontSize: '13px' }}>No interactions logged yet. Try simulating a comment above!</p>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
+                        <th style={{ padding: '12px' }}>Timestamp</th>
+                        <th style={{ padding: '12px' }}>Social Post</th>
+                        <th style={{ padding: '12px' }}>Username</th>
+                        <th style={{ padding: '12px' }}>Comment Text</th>
+                        <th style={{ padding: '12px' }}>Matched Trigger</th>
+                        <th style={{ padding: '12px' }}>Auto-Reply Response</th>
+                        <th style={{ padding: '12px' }}>Status</th>
+                        <th style={{ padding: '12px' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {interactionLogs.map((log) => {
+                        const postLabel = log.socialPost?.product 
+                          ? `Product: ${log.socialPost.product.title.substring(0,20)}...` 
+                          : (log.socialPost?.collection ? `Collection: ${log.socialPost.collection.title.substring(0,20)}...` : 'General Post');
+                        
+                        let statusColor = '#94a3b8'; // Slate 400
+                        if (log.status.includes('SENT')) statusColor = '#10b981'; // Green 500
+                        else if (log.status.includes('FAILED')) statusColor = '#ef4444'; // Red 500
+                        else if (log.status === 'NO_TRIGGER_MATCH') statusColor = '#f59e0b'; // Amber 500
+
+                        return (
+                          <tr key={log.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', background: 'rgba(0,0,0,0.05)' }}>
+                            <td style={{ padding: '12px', whiteSpace: 'nowrap' }}>{new Date(log.createdAt).toLocaleString()}</td>
+                            <td style={{ padding: '12px' }} title={log.socialPostId || ''}>{postLabel}</td>
+                            <td style={{ padding: '12px', fontWeight: 700 }}>@{log.username}</td>
+                            <td style={{ padding: '12px' }}>"{log.commentText}"</td>
+                            <td style={{ padding: '12px' }}>
+                              <span style={{ background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: '4px', fontSize: '11px' }}>
+                                {log.triggerWord}
+                              </span>
+                            </td>
+                            <td style={{ padding: '12px' }}>{log.responseSent}</td>
+                            <td style={{ padding: '12px', fontWeight: 700, color: statusColor }}>{log.status}</td>
+                            <td style={{ padding: '12px' }}>
+                              <button 
+                                style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer' }}
+                                onClick={() => handleDeleteLog(log.id)}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

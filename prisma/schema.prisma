@@ -24,17 +24,47 @@ model Product {
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
   socialPosts       SocialPost[]
+  collections       Collection[] // Implicit many-to-many relation
 }
 
 model SocialPost {
   id               String    @id @default(uuid())
-  productId        String
-  product          Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId        String?
+  product          Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  collectionId     String?
+  collection       Collection? @relation(fields: [collectionId], references: [id], onDelete: Cascade)
   platform         String    // "instagram", "tiktok", "pinterest", "twitter"
   generatedContent String
   status           String    // "DRAFT", "SENT", "FAILED"
   publishDate      DateTime?
   ayrshareRefId    String?
+  triggerWords     String?   @default("link,store,recommendations")
+  createdAt        DateTime  @default(now())
+  interactionLogs  InteractionLog[]
+}
+
+model Collection {
+  id                String       @id @default(uuid())
+  title             String
+  description       String
+  slug              String       @unique
+  sceneImage        String       // Base64 or URL
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  products          Product[]    // Implicit many-to-many relation
+  socialPosts       SocialPost[]
+}
+
+model InteractionLog {
+  id               String    @id @default(uuid())
+  username         String
+  commentText      String
+  triggerWord      String
+  status           String    // "SENT", "FAILED", "NO_TRIGGER_MATCH", "SENT (SIMULATED)"
+  responseSent     String    // The message/link sent back
+  platform         String    // "instagram"
+  socialPostId     String?
+  socialPost       SocialPost? @relation(fields: [socialPostId], references: [id], onDelete: SetNull)
   createdAt        DateTime  @default(now())
 }
 

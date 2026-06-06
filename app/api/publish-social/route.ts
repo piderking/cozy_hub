@@ -21,14 +21,15 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { productId, postContent, platforms, mediaUrls } = body;
+    const { productId, collectionId, postContent, platforms, mediaUrls, triggerWords } = body;
 
     if (!postContent || !platforms || !Array.isArray(platforms) || platforms.length === 0) {
       return NextResponse.json({ error: 'Post content and at least one target platform are required' }, { status: 400 });
     }
 
-    // Fetch product details for affiliate URL if needed
+    // Fetch product or collection details
     const product = productId ? await prisma.product.findUnique({ where: { id: productId } }) : null;
+    const collection = collectionId ? await prisma.collection.findUnique({ where: { id: collectionId } }) : null;
 
     // Map platforms: 'twitter' -> 'x'
     const mappedPlatforms = platforms.map(p => {
@@ -47,6 +48,8 @@ export async function POST(request: Request) {
     let postTitle = 'Cozy Hub Recommendation';
     if (product?.title) {
       postTitle = product.title;
+    } else if (collection?.title) {
+      postTitle = collection.title;
     } else {
       const firstLine = postContent.split('\n')[0].trim().replace(/^[^a-zA-Z0-9]+/, '');
       if (firstLine && firstLine.length > 3) {
@@ -68,6 +71,8 @@ export async function POST(request: Request) {
     formData.append('title', postTitle);
     formData.append('description', postDescription);
 
+    const origin = request.headers.get('origin') || 'http://localhost:3000';
+
     if (mappedPlatforms.includes('pinterest')) {
       if (!pinterest_board_id) {
         return NextResponse.json(
@@ -76,7 +81,12 @@ export async function POST(request: Request) {
         );
       }
       formData.append('pinterest_board_id', pinterest_board_id);
-      if (product?.affiliateUrl) {
+      
+      // For Pinterest, set the direct destination link:
+      // Product affiliate URL, or the Collection landing page
+      if (collection) {
+        formData.append('pinterest_link', `${origin}/collections/${collection.slug}`);
+      } else if (product?.affiliateUrl) {
         formData.append('pinterest_link', product.affiliateUrl);
       }
     }
@@ -133,17 +143,17 @@ export async function POST(request: Request) {
     if (!response.ok || responseData.success === false) {
       console.error('Upload-Post publish failed:', responseData);
 
-      // If productId is provided, log a failed post in the database
-      if (productId) {
-        await prisma.socialPost.create({
-          data: {
-            productId,
-            platform: platforms.join(', '),
-            generatedContent: postContent,
-            status: 'FAILED',
-          },
-        });
-      }
+      // Log a failed post in the database
+      await prisma.socialPost.create({
+        data: {
+          productId: productId || null,
+          collectionId: collectionId || null,
+          platform: platforms.join(', '),
+          generatedContent: postContent,
+          status: 'FAILED',
+          triggerWords: triggerWords || 'link,store,recommendations',
+        },
+      });
 
       return NextResponse.json(
         { error: responseData.message || responseData.error || 'Failed to post through Upload-Post API' },
@@ -152,17 +162,17 @@ export async function POST(request: Request) {
     }
 
     // Save successful post record to the database
-    if (productId) {
-      await prisma.socialPost.create({
-        data: {
-          productId,
-          platform: platforms.join(', '),
-          generatedContent: postContent,
-          status: 'SENT',
-          ayrshareRefId: responseData.request_id || responseData.job_id || '',
-        },
-      });
-    }
+    await prisma.socialPost.create({
+      data: {
+        productId: productId || null,
+        collectionId: collectionId || null,
+        platform: platforms.join(', '),
+        generatedContent: postContent,
+        status: 'SENT',
+        ayrshareRefId: responseData.request_id || responseData.job_id || '',
+        triggerWords: triggerWords || 'link,store,recommendations',
+      },
+    });
 
     return NextResponse.json({ success: true, data: responseData });
   } catch (error: any) {

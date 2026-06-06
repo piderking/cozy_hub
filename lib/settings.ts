@@ -42,9 +42,9 @@ export async function getSettings(): Promise<HubSettings> {
       secondary_color: settingsMap.get('secondary_color') ?? DEFAULT_SETTINGS.secondary_color,
       background_color: settingsMap.get('background_color') ?? DEFAULT_SETTINGS.background_color,
       text_color: settingsMap.get('text_color') ?? DEFAULT_SETTINGS.text_color,
-      gemini_api_key: settingsMap.get('gemini_api_key') || process.env.GEMINI_API_KEY || '',
-      uploadpost_api_key: settingsMap.get('uploadpost_api_key') || process.env.UPLOADPOST_API_KEY || '',
-      uploadpost_username: settingsMap.get('uploadpost_username') || process.env.UPLOADPOST_USERNAME || '',
+      gemini_api_key: process.env.GEMINI_API_KEY || '',
+      uploadpost_api_key: process.env.UPLOADPOST_API_KEY || process.env.AYRSHARE_API_KEY || '',
+      uploadpost_username: process.env.UPLOADPOST_USERNAME || process.env.AYRSHARE_USERNAME || '',
       pinterest_board_id: settingsMap.get('pinterest_board_id') ?? '',
       amazon_tag: settingsMap.get('amazon_tag') ?? DEFAULT_SETTINGS.amazon_tag,
       niche_prompt_directive: settingsMap.get('niche_prompt_directive') ?? DEFAULT_SETTINGS.niche_prompt_directive,
@@ -55,8 +55,8 @@ export async function getSettings(): Promise<HubSettings> {
     return {
       ...DEFAULT_SETTINGS,
       gemini_api_key: process.env.GEMINI_API_KEY || '',
-      uploadpost_api_key: process.env.UPLOADPOST_API_KEY || '',
-      uploadpost_username: process.env.UPLOADPOST_USERNAME || '',
+      uploadpost_api_key: process.env.UPLOADPOST_API_KEY || process.env.AYRSHARE_API_KEY || '',
+      uploadpost_username: process.env.UPLOADPOST_USERNAME || process.env.AYRSHARE_USERNAME || '',
       pinterest_board_id: process.env.PINTEREST_BOARD_ID || '',
     };
   }
