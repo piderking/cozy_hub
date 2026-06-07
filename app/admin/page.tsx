@@ -746,7 +746,7 @@ export default function AdminPage() {
 
       // If prompt is empty or does not use the required product copy prefix, fetch a fresh one
       let fetchedPrompt = curatedProduct.imagePrompt;
-      const expectedPrefix = 'exactly copy and replicate';
+      const expectedPrefix = 'an aesthetic, photorealistic product mockup of';
       if (!fetchedPrompt || !fetchedPrompt.toLowerCase().startsWith(expectedPrefix)) {
         try {
           const promptRes = await fetch('/api/generate-mockup', {

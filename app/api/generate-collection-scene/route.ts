@@ -94,14 +94,14 @@ Use the brand guidelines:
 "${niche_prompt_directive}"
 
 The prompt MUST follow this exact structural format and phrasing:
-"Exactly copy and replicate the products from the reference images, maintaining their precise shapes, colors, materials, textures, and physical design details, and place them together into a styled space that [describe the environment/furniture and placements], [describe lighting, composition, and visual qualities]."
+"An aesthetic, photorealistic composite scene containing [literal detailed descriptions of each product, detailing their shapes, colors, materials, and design details exactly as seen in the reference images], all placed together inside a styled [describe the environment/furniture and placements], [describe lighting, composition, and visual qualities]."
 
 CRITICAL VISUAL COMPLIANCE:
-1. Do NOT use generic terms like "professional product photography" or generic descriptions of products. You must describe each product in the reference images with extreme visual precision so that the generated image includes the EXACT products from the references.
-2. The prompt MUST start with the exact phrase: "Exactly copy and replicate the products from the reference images, maintaining their precise shapes, colors, materials, textures, and physical design details, and place them together into a space that " followed by the scene details.
-3. You must carefully analyze each of the attached product reference images. Describe the physical styling, materials, shape, colors, and visual details of these products as closely as possible to their reference images and descriptions. This ensures that when Google's Imagen model generates the composite scene, each product in the scene remains visually consistent and as close to its actual reference product image as possible.
-
-IMPORTANT: Output ONLY the raw prompt text. Do not write introductory words or wrap in quotes. Keep it to 1 or 2 concise descriptive sentences.`;
+1. Google's Imagen model is text-only and cannot see the reference images. Therefore, you MUST write an extremely detailed, literal visual description of each product (describing its exact shape, structure, colors, materials, patterns, dimensions, and unique physical design details) based on the provided reference images.
+2. The prompt MUST describe each product with such high fidelity that the generated scene will show the products looking identical to the real physical items, preventing false advertising.
+3. Do NOT use generic names or placeholder phrases (e.g. write "a large rectangular over-the-door storage basket made from woven thick off-white cotton rope with three tiers and dark grey metallic door hooks" instead of "a storage basket" or "the product").
+4. The prompt MUST start with the exact phrase: "An aesthetic, photorealistic composite scene containing " followed by your literal product descriptions, and then describe the scene environment.
+5. Output ONLY the raw prompt text. Do not write introductory words or wrap in quotes. Keep it to 2 or 3 concise descriptive sentences.`;
 
       const promptResponse = await generateContentWithRetry({
         apiKey: gemini_api_key,
@@ -109,7 +109,7 @@ IMPORTANT: Output ONLY the raw prompt text. Do not write introductory words or w
         images: imagesList.length > 0 ? imagesList : undefined
       });
 
-      const detailedScenePrompt = promptResponse.text?.trim() || `Exactly copy and replicate the products from the reference images, maintaining their precise shapes, colors, materials, textures, and physical design details, and place them together into a space that is clean and styled.`;
+      const detailedScenePrompt = promptResponse.text?.trim() || `An aesthetic, photorealistic composite scene containing the specified products, placed together into a space that is clean and styled.`;
       
       return NextResponse.json({ success: true, prompt: detailedScenePrompt });
     }
