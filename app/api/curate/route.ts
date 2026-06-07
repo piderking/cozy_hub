@@ -135,7 +135,7 @@ Return format (must be valid JSON, no markdown codeblocks, no extra explanation)
   "title": "Clean Title of Product",
   "rawDescription": "Detailed overview of the product description, technical details, and original specs gathered from the page.",
   "category": "Bedroom",
-  "imagePrompt": "Detailed product photography prompt for Google's Imagen model, describing this product inside a themed environment. Keep the main product visual traits exactly as described on the page.",
+  "imagePrompt": "Detailed prompt for Google's Imagen model. The prompt MUST start with the exact phrase: 'Exactly copy and replicate the product from the reference image, maintaining its precise shape, colors, materials, textures, and physical design details, and place it into a space that ' followed by the themed environment description.",
   "features": ["feature 1", "feature 2", "feature 3"],
   "pros": ["pro 1", "pro 2"],
   "cons": ["con 1", "con 2"],

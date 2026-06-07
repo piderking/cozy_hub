@@ -744,9 +744,10 @@ export default function AdminPage() {
         throw new Error(data.error || 'Failed to generate copy');
       }
 
-      // If prompt is empty, let's also fetch a template prompt based on the newly generated clean title
+      // If prompt is empty or does not use the required product copy prefix, fetch a fresh one
       let fetchedPrompt = curatedProduct.imagePrompt;
-      if (!fetchedPrompt) {
+      const expectedPrefix = 'exactly copy and replicate';
+      if (!fetchedPrompt || !fetchedPrompt.toLowerCase().startsWith(expectedPrefix)) {
         try {
           const promptRes = await fetch('/api/generate-mockup', {
             method: 'POST',
