@@ -4,6 +4,10 @@ interface GenerateOptions {
   apiKey: string;
   prompt: string;
   responseMimeType?: string;
+  images?: {
+    mimeType: string;
+    data: string; // Base64 clean string
+  }[];
 }
 
 /**
@@ -30,10 +34,23 @@ export async function generateContentWithRetry(options: GenerateOptions): Promis
       try {
         console.log(`[Gemini] Calling ${model} (attempt ${attempt}/${maxRetries})...`);
         
+        const parts: any[] = [{ text: options.prompt }];
+        
+        if (options.images && options.images.length > 0) {
+          options.images.forEach(img => {
+            parts.push({
+              inlineData: {
+                mimeType: img.mimeType,
+                data: img.data
+              }
+            });
+          });
+        }
+
         const payload: any = {
           model,
           contents: [
-            { role: 'user', parts: [{ text: options.prompt }] }
+            { role: 'user', parts }
           ]
         };
 

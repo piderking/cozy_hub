@@ -3,6 +3,36 @@ import { GoogleGenAI } from '@google/genai';
 import { getSettings } from '@/lib/settings';
 import { generateContentWithRetry } from '@/lib/gemini';
 
+async function fetchAndParseImage(imageUrl: string | undefined): Promise<{ mimeType: string; data: string } | undefined> {
+  if (!imageUrl) return undefined;
+  
+  if (imageUrl.startsWith('data:image')) {
+    const match = imageUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    if (match && match.length === 3) {
+      return {
+        mimeType: match[1],
+        data: match[2],
+      };
+    }
+  } else if (imageUrl.startsWith('http')) {
+    try {
+      const res = await fetch(imageUrl);
+      if (res.ok) {
+        const contentType = res.headers.get('content-type') || 'image/png';
+        const buffer = await res.arrayBuffer();
+        const base64Data = Buffer.from(buffer).toString('base64');
+        return {
+          mimeType: contentType,
+          data: base64Data,
+        };
+      }
+    } catch (err) {
+      console.warn('Failed to fetch image from URL:', imageUrl, err);
+    }
+  }
+  return undefined;
+}
+
 export async function POST(request: Request) {
   try {
     const settings = await getSettings();
@@ -29,31 +59,33 @@ export async function POST(request: Request) {
 
       const promptGeneratorSystem = `You are a visual art director for an aesthetic product review brand named "${brand_name}".
 Your task is to write a detailed, high-quality, professional image generation prompt for Google's Imagen model.
-The goal of the prompt is to visualize a product inside a themed environment matching these guidelines:
+The goal of the prompt is to visualize the product provided in the user's reference image inside a themed environment matching these guidelines:
 "${niche_prompt_directive}"
 
 The prompt must describe:
-- The product itself. You must describe its shape, material, colors, and key physical features in detail based on the title, description, and reference image URL (${mainImage || ''}) so the mockup image matches the actual product as closely as possible.
+- The exact product provided in the reference image. You must analyze the attached image carefully and describe its visual shape, material, colors, textures, details, and key physical features with extreme precision so that the generated image includes the EXACT product from the image.
 - The environment / background details (styled, clean, matching the category "${category}")
 - Lighting (e.g. warm golden hour sunbeams, soft indoor bokeh, cinematic moody shadows)
 - Composition (e.g. close-up shot, front angle, sitting on a wooden table, copy space)
 - Quality terms (e.g. photorealistic, professional product photography, 8k resolution, crisp textures)
 
 CRITICAL INSTRUCTION:
-Make sure to keep the product's visual representation in the prompt as close to the reference image URL (${mainImage || ''}) and physical details as possible, so that Google's Imagen model can render the product accurately.
+Ensure you describe the product exactly as it looks in the provided reference image, so that when Google's Imagen model renders the image, the product appears identical to the original one. Do not generalize, modify, or change its color/material.
 
 IMPORTANT: Output ONLY the raw prompt text. Do not write introductory words like "Here is your prompt:" or wrap in quotes. Keep it to 1 or 2 concise descriptive sentences.`;
 
       const promptGeneratorUser = `Product Title: ${title}
 Product Details: ${rawDescription || ''}
 Category: ${category}
-Reference Image URL: ${mainImage || ''}
 
-Write a professional product photography prompt for this product.`;
+Write a professional product photography prompt that places the exact product shown in the reference image in the styled scene.`;
+
+      const parsedImage = await fetchAndParseImage(mainImage);
 
       const promptResponse = await generateContentWithRetry({
         apiKey: gemini_api_key,
-        prompt: promptGeneratorSystem + '\n\n' + promptGeneratorUser
+        prompt: promptGeneratorSystem + '\n\n' + promptGeneratorUser,
+        images: parsedImage ? [parsedImage] : undefined
       });
 
       const detailedImagePrompt = promptResponse.text?.trim() || `Professional product photography of ${title} sitting in a cozy styled ${category} setup, soft warm lighting, photorealistic, 8k.`;
@@ -79,18 +111,20 @@ We are generating a mockup image for this product:
 Product Title: "${title || ''}"
 Category: "${category || ''}"
 Product Description: "${rawDescription || ''}"
-Reference Image URL: "${mainImage || ''}"
 
 Your task is to rewrite the image generation prompt to incorporate the user's revision instructions.
 CRITICAL COMPLIANCE RULES:
-1. Ensure the product's appearance, shape, material, colors, and physical details remain consistent with the original product description and reference image URL (${mainImage || ''}). Do NOT alter, simplify, or replace the product itself. Keep the generated mockup image visually as close to the actual reference product image as possible.
+1. Analyze the provided product reference image carefully. Ensure the product's appearance, shape, material, colors, textures, and physical details in the prompt remain absolutely identical to the reference image. Do NOT alter, simplify, or replace the product itself.
 2. Only modify the environment, background elements, surface, placement, styling, or lighting conditions of the scene according to the user's revision instructions.
 3. Keep the prompt descriptive, focused, and optimized for an image generation model.
 4. Output ONLY the raw updated prompt text. Do not wrap in quotes or add introductory text.`;
 
+      const parsedImage = await fetchAndParseImage(mainImage);
+
       const response = await generateContentWithRetry({
         apiKey: gemini_api_key,
-        prompt: refinerSystem
+        prompt: refinerSystem,
+        images: parsedImage ? [parsedImage] : undefined
       });
 
       const refinedPrompt = response.text?.trim() || originalPrompt;

@@ -3,6 +3,36 @@ import { GoogleGenAI } from '@google/genai';
 import { getSettings } from '@/lib/settings';
 import { generateContentWithRetry } from '@/lib/gemini';
 
+async function fetchAndParseImage(imageUrl: string | undefined): Promise<{ mimeType: string; data: string } | undefined> {
+  if (!imageUrl) return undefined;
+  
+  if (imageUrl.startsWith('data:image')) {
+    const match = imageUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    if (match && match.length === 3) {
+      return {
+        mimeType: match[1],
+        data: match[2],
+      };
+    }
+  } else if (imageUrl.startsWith('http')) {
+    try {
+      const res = await fetch(imageUrl);
+      if (res.ok) {
+        const contentType = res.headers.get('content-type') || 'image/png';
+        const buffer = await res.arrayBuffer();
+        const base64Data = Buffer.from(buffer).toString('base64');
+        return {
+          mimeType: contentType,
+          data: base64Data,
+        };
+      }
+    } catch (err) {
+      console.warn('Failed to fetch image from URL:', imageUrl, err);
+    }
+  }
+  return undefined;
+}
+
 export async function POST(request: Request) {
   try {
     const settings = await getSettings();
@@ -27,33 +57,44 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'At least one product is required to generate a scene prompt' }, { status: 400 });
       }
 
-      const productsList = products
-        .map((p, idx) => {
-          let imgUrl = p.mainImage || '';
-          if (p.galleryImages && typeof p.galleryImages === 'string') {
-            try {
-              const parsedGallery = JSON.parse(p.galleryImages);
-              if (parsedGallery.originalProductImage) {
-                imgUrl = parsedGallery.originalProductImage;
-              }
-            } catch (_) {}
+      const imagesList: { mimeType: string; data: string }[] = [];
+      const productsList = [];
+
+      for (let idx = 0; idx < products.length; idx++) {
+        const p = products[idx];
+        let imgUrl = p.mainImage || '';
+        if (p.galleryImages && typeof p.galleryImages === 'string') {
+          try {
+            const parsedGallery = JSON.parse(p.galleryImages);
+            if (parsedGallery.originalProductImage) {
+              imgUrl = parsedGallery.originalProductImage;
+            }
+          } catch (_) {}
+        }
+        const desc = p.customDescription || p.rawDescription || '';
+        productsList.push(`${idx + 1}. Product Title: "${p.title}" (Category: ${p.category})\n   Description Summary: ${desc}`);
+
+        if (imgUrl) {
+          const parsed = await fetchAndParseImage(imgUrl);
+          if (parsed) {
+            imagesList.push(parsed);
           }
-          const desc = p.customDescription || p.rawDescription || '';
-          return `${idx + 1}. Product Title: "${p.title}" (Category: ${p.category})\n   Reference Image URL: ${imgUrl}\n   Description Summary: ${desc}`;
-        })
-        .join('\n\n');
+        }
+      }
+
+      const productsListStr = productsList.join('\n\n');
 
       const systemPrompt = `You are a professional visual art director for an aesthetic lifestyle brand named "${brand_name}".
 Your task is to write a detailed, high-quality, professional image generation prompt for Google's Imagen model.
-The prompt must describe a single, cohesive, styled environment (like a cozy bedroom, a minimalist desk setup, or a warm living room nook) that naturally blends all of these products together:
+The prompt must describe a single, cohesive, styled environment (like a cozy bedroom, a minimalist desk setup, or a warm living room nook) that naturally blends the products shown in the attached reference images together:
 
-${productsList}
+${productsListStr}
 
 Use the brand guidelines:
 "${niche_prompt_directive}"
 
 CRITICAL VISUAL COMPLIANCE:
-For each product in the list, analyze its description and its reference image URL. The generated prompt must describe the physical styling, materials, shape, colors, and visual details of these products as closely as possible to their reference descriptions and images. This ensures that when Google's Imagen model generates the composite scene, each product in the scene remains visually consistent and as close to its actual reference product image as possible.
+You must carefully analyze each of the attached product reference images. Describe the physical styling, materials, shape, colors, and visual details of these products as closely as possible to their reference images and descriptions. This ensures that when Google's Imagen model generates the composite scene, each product in the scene remains visually consistent and as close to its actual reference product image as possible.
 
 The prompt must describe:
 - The styled environment/furniture (e.g. a warm oak wood desk, a cozy linen-layered bed).
@@ -66,7 +107,8 @@ IMPORTANT: Output ONLY the raw prompt text. Do not write introductory words or w
 
       const promptResponse = await generateContentWithRetry({
         apiKey: gemini_api_key,
-        prompt: systemPrompt
+        prompt: systemPrompt,
+        images: imagesList.length > 0 ? imagesList : undefined
       });
 
       const detailedScenePrompt = promptResponse.text?.trim() || `Professional catalog interior design photography of a cozy, styled space with these items arranged beautifully, warm soft lighting, photorealistic.`;
