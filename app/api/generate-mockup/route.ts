@@ -62,17 +62,13 @@ Your task is to write a detailed, high-quality, professional image generation pr
 The goal of the prompt is to visualize the product provided in the user's reference image inside a themed environment matching these guidelines:
 "${niche_prompt_directive}"
 
-The prompt must describe:
-- The exact product provided in the reference image. You must analyze the attached image carefully and describe its visual shape, material, colors, textures, details, and key physical features with extreme precision so that the generated image includes the EXACT product from the image.
-- The environment / background details (styled, clean, matching the category "${category}")
-- Lighting (e.g. warm golden hour sunbeams, soft indoor bokeh, cinematic moody shadows)
-- Composition (e.g. close-up shot, front angle, sitting on a wooden table, copy space)
-- Quality terms (e.g. photorealistic, professional product photography, 8k resolution, crisp textures)
+The prompt MUST follow this exact structural format and phrasing:
+"Exactly copy and replicate the product from the reference image, maintaining its precise shape, colors, materials, textures, and physical design details, and place it into a styled space that [describe the environment/background details matching the category '${category}' and guidelines], [describe lighting, composition, and visual qualities]."
 
-CRITICAL INSTRUCTION:
-Ensure you describe the product exactly as it looks in the provided reference image, so that when Google's Imagen model renders the image, the product appears identical to the original one. Do not generalize, modify, or change its color/material.
-
-IMPORTANT: Output ONLY the raw prompt text. Do not write introductory words like "Here is your prompt:" or wrap in quotes. Keep it to 1 or 2 concise descriptive sentences.`;
+CRITICAL INSTRUCTIONS:
+1. Do NOT use generic terms like "professional product photography" or generic descriptions of a product. You must describe the product in the reference image with extreme visual precision so that the generated image includes the EXACT product from the reference.
+2. The prompt MUST start with the exact phrase: "Exactly copy and replicate the product from the reference image, maintaining its precise shape, colors, materials, textures, and physical design details, and place it into a space that " followed by the scene description.
+3. Output ONLY the raw prompt text. Do not write introductory words or wrap in quotes.`;
 
       const promptGeneratorUser = `Product Title: ${title}
 Product Details: ${rawDescription || ''}
@@ -88,7 +84,7 @@ Write a professional product photography prompt that places the exact product sh
         images: parsedImage ? [parsedImage] : undefined
       });
 
-      const detailedImagePrompt = promptResponse.text?.trim() || `Professional product photography of ${title} sitting in a cozy styled ${category} setup, soft warm lighting, photorealistic, 8k.`;
+      const detailedImagePrompt = promptResponse.text?.trim() || `Exactly copy and replicate the product from the reference image, maintaining its precise shape, colors, materials, textures, and physical design details, and place it into a space that sits in a cozy styled ${category} setup.`;
       
       return NextResponse.json({ success: true, prompt: detailedImagePrompt });
     }
@@ -114,10 +110,11 @@ Product Description: "${rawDescription || ''}"
 
 Your task is to rewrite the image generation prompt to incorporate the user's revision instructions.
 CRITICAL COMPLIANCE RULES:
-1. Analyze the provided product reference image carefully. Ensure the product's appearance, shape, material, colors, textures, and physical details in the prompt remain absolutely identical to the reference image. Do NOT alter, simplify, or replace the product itself.
-2. Only modify the environment, background elements, surface, placement, styling, or lighting conditions of the scene according to the user's revision instructions.
-3. Keep the prompt descriptive, focused, and optimized for an image generation model.
-4. Output ONLY the raw updated prompt text. Do not wrap in quotes or add introductory text.`;
+1. Ensure the prompt starts with the exact phrase: "Exactly copy and replicate the product from the reference image, maintaining its precise shape, colors, materials, textures, and physical design details, and place it into a space that " followed by the updated scene description.
+2. Analyze the provided product reference image carefully. Ensure the product's appearance, shape, material, colors, textures, and physical details in the prompt remain absolutely identical to the reference image. Do NOT alter, simplify, or replace the product itself.
+3. Only modify the environment, background elements, surface, placement, styling, or lighting conditions of the scene according to the user's revision instructions.
+4. Keep the prompt descriptive, focused, and optimized for an image generation model.
+5. Output ONLY the raw updated prompt text. Do not wrap in quotes or add introductory text.`;
 
       const parsedImage = await fetchAndParseImage(mainImage);
 

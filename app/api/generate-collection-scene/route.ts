@@ -93,15 +93,13 @@ ${productsListStr}
 Use the brand guidelines:
 "${niche_prompt_directive}"
 
-CRITICAL VISUAL COMPLIANCE:
-You must carefully analyze each of the attached product reference images. Describe the physical styling, materials, shape, colors, and visual details of these products as closely as possible to their reference images and descriptions. This ensures that when Google's Imagen model generates the composite scene, each product in the scene remains visually consistent and as close to its actual reference product image as possible.
+The prompt MUST follow this exact structural format and phrasing:
+"Exactly copy and replicate the products from the reference images, maintaining their precise shapes, colors, materials, textures, and physical design details, and place them together into a styled space that [describe the environment/furniture and placements], [describe lighting, composition, and visual qualities]."
 
-The prompt must describe:
-- The styled environment/furniture (e.g. a warm oak wood desk, a cozy linen-layered bed).
-- How the specified products are placed in the scene (e.g., the candle sits on the side table next to the blanket).
-- Ambient details and colors (cream, beige, soft warm tones, minimalist clutter-free).
-- Lighting (cinematic warm afternoon sunbeams, soft indoor glow, cozy bokeh background).
-- Composition (e.g. professional interior design photography, high-end catalog shot, crisp textures).
+CRITICAL VISUAL COMPLIANCE:
+1. Do NOT use generic terms like "professional product photography" or generic descriptions of products. You must describe each product in the reference images with extreme visual precision so that the generated image includes the EXACT products from the references.
+2. The prompt MUST start with the exact phrase: "Exactly copy and replicate the products from the reference images, maintaining their precise shapes, colors, materials, textures, and physical design details, and place them together into a space that " followed by the scene details.
+3. You must carefully analyze each of the attached product reference images. Describe the physical styling, materials, shape, colors, and visual details of these products as closely as possible to their reference images and descriptions. This ensures that when Google's Imagen model generates the composite scene, each product in the scene remains visually consistent and as close to its actual reference product image as possible.
 
 IMPORTANT: Output ONLY the raw prompt text. Do not write introductory words or wrap in quotes. Keep it to 1 or 2 concise descriptive sentences.`;
 
@@ -111,7 +109,7 @@ IMPORTANT: Output ONLY the raw prompt text. Do not write introductory words or w
         images: imagesList.length > 0 ? imagesList : undefined
       });
 
-      const detailedScenePrompt = promptResponse.text?.trim() || `Professional catalog interior design photography of a cozy, styled space with these items arranged beautifully, warm soft lighting, photorealistic.`;
+      const detailedScenePrompt = promptResponse.text?.trim() || `Exactly copy and replicate the products from the reference images, maintaining their precise shapes, colors, materials, textures, and physical design details, and place them together into a space that is clean and styled.`;
       
       return NextResponse.json({ success: true, prompt: detailedScenePrompt });
     }
