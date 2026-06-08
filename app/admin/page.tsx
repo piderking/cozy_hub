@@ -474,7 +474,7 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        showMessage(`Successfully posted to ${platform} via Upload-Post!`);
+        showMessage(`Successfully posted to ${platform} via Zernio!`);
       } else {
         showMessage(data.error || 'Publishing failed', 'error');
       }
@@ -1120,7 +1120,7 @@ export default function AdminPage() {
         }));
       }
 
-      showMessage(`Post successfully sent to ${platform} via Upload-Post!`);
+      showMessage(`Post successfully sent to ${platform} via Zernio!`);
     } catch (err: any) {
       showMessage(err.message, 'error');
     } finally {
@@ -1800,7 +1800,7 @@ export default function AdminPage() {
                   <label htmlFor="isPublished" style={{ margin: 0, cursor: 'pointer', fontSize: '12px' }}>Publish immediately to web catalog</label>
                 </div>
 
-                {/* Make sure user saves first before sharing, to generate a dynamic local URL for Upload-Post */}
+                {/* Make sure user saves first before sharing, to generate a dynamic local URL for Zernio */}
                 <button 
                   className="glass-button" 
                   style={{ width: '100%', padding: '10px' }} 
@@ -1822,7 +1822,7 @@ export default function AdminPage() {
                     </>
                   ) : (
                     <>
-                      <Send size={14} /> 📢 Post to All Socials (Upload-Post)
+                      <Send size={14} /> 📢 Post to All Socials (Zernio)
                     </>
                   )}
                 </button>
