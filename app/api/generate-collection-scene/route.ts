@@ -85,8 +85,8 @@ export async function POST(request: Request) {
       const productsListStr = productsList.join('\n\n');
 
       const systemPrompt = `You are a professional visual art director for an aesthetic lifestyle brand named "${brand_name}".
-Your task is to write a detailed, high-quality, professional image generation prompt for Google's Imagen model.
-The prompt must describe a single, cohesive, styled environment (like a cozy bedroom, a minimalist desk setup, or a warm living room nook) that naturally blends the products shown in the attached reference images together:
+Your task is to write a high-quality, professional image generation prompt for a multimodal model.
+The prompt must describe a single, cohesive, styled environment (like a cozy bedroom, a minimalist desk setup, or a warm living room nook) that naturally blends the products shown in the reference images together:
 
 ${productsListStr}
 
@@ -94,14 +94,13 @@ Use the brand guidelines:
 "${niche_prompt_directive}"
 
 The prompt MUST follow this exact structural format and phrasing:
-"An aesthetic, photorealistic composite scene containing [literal detailed descriptions of each product, detailing their shapes, colors, materials, and design details exactly as seen in the reference images], all placed together inside a styled [describe the environment/furniture and placements], [describe lighting, composition, and visual qualities]."
+"A photorealistic composite scene containing the provided products in the reference images. Place them together inside a styled [describe the environment/furniture and placements], [describe lighting, composition, and visual qualities]."
 
 CRITICAL VISUAL COMPLIANCE:
-1. Google's Imagen model is text-only and cannot see the reference images. Therefore, you MUST write an extremely detailed, literal visual description of each product (describing its exact shape, structure, colors, materials, patterns, dimensions, and unique physical design details) based on the provided reference images.
-2. The prompt MUST describe each product with such high fidelity that the generated scene will show the products looking identical to the real physical items, preventing false advertising.
-3. Do NOT use generic names or placeholder phrases (e.g. write "a large rectangular over-the-door storage basket made from woven thick off-white cotton rope with three tiers and dark grey metallic door hooks" instead of "a storage basket" or "the product").
-4. The prompt MUST start with the exact phrase: "An aesthetic, photorealistic composite scene containing " followed by your literal product descriptions, and then describe the scene environment.
-5. Output ONLY the raw prompt text. Do not write introductory words or wrap in quotes. Keep it to 2 or 3 concise descriptive sentences.`;
+1. Do NOT describe the products themselves. The model can see the reference images, so describing product details (like shape, color, or text) is unnecessary and causes the AI to hallucinate incorrect details.
+2. Focus entirely on describing the environment, placement, and visual styling of the scene where the products are placed.
+3. The prompt MUST start with the exact phrase: "A photorealistic composite scene containing the provided products in the reference images. Place them together inside a styled " followed by your environment description.
+4. Output ONLY the raw prompt text. Do not write introductory words or wrap in quotes. Keep it to 2 or 3 concise descriptive sentences.`;
 
       const promptResponse = await generateContentWithRetry({
         apiKey: gemini_api_key,
@@ -109,7 +108,7 @@ CRITICAL VISUAL COMPLIANCE:
         images: imagesList.length > 0 ? imagesList : undefined
       });
 
-      const detailedScenePrompt = promptResponse.text?.trim() || `An aesthetic, photorealistic composite scene containing the specified products, placed together into a space that is clean and styled.`;
+      const detailedScenePrompt = promptResponse.text?.trim() || `A photorealistic composite scene containing the provided products in the reference images. Place them together inside a styled clean and decorated setup.`;
       
       return NextResponse.json({ success: true, prompt: detailedScenePrompt });
     }
@@ -144,7 +143,7 @@ CRITICAL VISUAL COMPLIANCE:
       }
 
       if (parsedImages.length > 0) {
-        console.log(`Sending prompt and ${parsedImages.length} images to gemini-3.5-flash-image for scene mockup...`);
+        console.log(`Sending prompt and ${parsedImages.length} images to gemini-3.1-flash-image-preview for scene mockup...`);
         
         // Upload all parsed images to Gemini Files API
         const uploadedFiles: { name: string; uri: string; mimeType: string }[] = [];
@@ -179,7 +178,7 @@ CRITICAL VISUAL COMPLIANCE:
           ];
 
           const response = await ai.models.generateContent({
-            model: 'gemini-3.5-flash-image',
+            model: 'gemini-3.1-flash-image-preview',
             contents: [
               {
                 role: 'user',
@@ -196,7 +195,7 @@ CRITICAL VISUAL COMPLIANCE:
           const imagePart = parts.find(p => p.inlineData);
 
           if (!imagePart || !imagePart.inlineData || !imagePart.inlineData.data) {
-            throw new Error('No image data was generated by the gemini-3.5-flash-image model.');
+            throw new Error('No image data was generated by the gemini-3.1-flash-image-preview model.');
           }
 
           const mimeType = imagePart.inlineData.mimeType || 'image/png';
