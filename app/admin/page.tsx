@@ -352,10 +352,15 @@ export default function AdminPage() {
     }
     setIsGeneratingCollScene(true);
     try {
+      const selectedProducts = products.filter(p => collectionForm.selectedProductIds.includes(p.id));
       const res = await fetch('/api/generate-collection-scene', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'mockup', prompt: collectionForm.scenePrompt }),
+        body: JSON.stringify({
+          action: 'mockup',
+          prompt: collectionForm.scenePrompt,
+          products: selectedProducts,
+        }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -852,6 +857,7 @@ export default function AdminPage() {
         body: JSON.stringify({
           action: 'mockup',
           prompt: curatedProduct.imagePrompt,
+          mainImage: curatedProduct.originalProductImage,
         }),
       });
 
