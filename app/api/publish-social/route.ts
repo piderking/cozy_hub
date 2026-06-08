@@ -137,12 +137,54 @@ export async function POST(request: Request) {
       }
     }
 
-    console.log(`Sending upload request to Zernio for platforms:`, mappedPlatforms);
+    // Fetch connected accounts from Zernio
+    console.log('Fetching connected accounts from Zernio...');
+    const accountsRes = await fetch('https://zernio.com/api/v1/accounts', {
+      headers: {
+        'Authorization': `Bearer ${zernio_api_key}`,
+      },
+    });
+
+    if (!accountsRes.ok) {
+      const errText = await accountsRes.text();
+      return NextResponse.json(
+        { error: `Failed to fetch connected accounts from Zernio: ${errText}` },
+        { status: accountsRes.status }
+      );
+    }
+
+    const accountsData = await accountsRes.json();
+    const accountsList = accountsData.accounts || [];
+
+    const zernioPlatformsPayload = [];
+    for (const plat of mappedPlatforms) {
+      const matchedAccount = accountsList.find((acc: any) => acc.platform === plat && acc.isActive !== false);
+      if (matchedAccount) {
+        zernioPlatformsPayload.push({
+          platform: plat,
+          accountId: matchedAccount._id,
+        });
+      } else {
+        return NextResponse.json(
+          { error: `No active connected account found in Zernio for platform: ${plat}. Please link it in your Zernio dashboard first.` },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (zernioPlatformsPayload.length === 0) {
+      return NextResponse.json(
+        { error: 'No active connected social accounts found in Zernio for the selected platforms.' },
+        { status: 400 }
+      );
+    }
+
+    console.log(`Sending upload request to Zernio for platforms:`, JSON.stringify(zernioPlatformsPayload));
 
     // Call Zernio API
     const zernioPayload: any = {
       text: postDescription,
-      platforms: mappedPlatforms
+      platforms: zernioPlatformsPayload
     };
 
     if (zernioMediaUrls.length > 0) {
