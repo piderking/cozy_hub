@@ -348,6 +348,26 @@ export async function POST(request: Request) {
       );
     }
 
+    // Auto-extract trigger words from generated content/caption
+    const triggersList = ['link', 'store', 'recommendations'];
+    if (triggerWords) {
+      triggerWords.split(',').forEach((t: string) => triggersList.push(t.trim().toLowerCase()));
+    }
+    
+    const commentRegex = /comment\s+['"“‘]?([a-zA-Z0-9_-]{2,15})['"”’]?/gi;
+    const dmRegex = /dm\s+['"“‘]?([a-zA-Z0-9_-]{2,15})['"”’]?/gi;
+    
+    const allTextToParse = mappedPlatforms.map(p => p.content).join('\n') + '\n' + (postContent || '');
+    let match;
+    while ((match = commentRegex.exec(allTextToParse)) !== null) {
+      if (match[1]) triggersList.push(match[1].toLowerCase());
+    }
+    while ((match = dmRegex.exec(allTextToParse)) !== null) {
+      if (match[1]) triggersList.push(match[1].toLowerCase());
+    }
+    
+    const uniqueTriggers = Array.from(new Set(triggersList)).filter(Boolean).join(',');
+
     // Save successful post record to the database
     await prisma.socialPost.create({
       data: {
@@ -357,7 +377,7 @@ export async function POST(request: Request) {
         generatedContent: mappedPlatforms.map(p => `${p.name}: ${p.content}`).join('\n\n'),
         status: 'SENT',
         ayrshareRefId: responseData.id || responseData.postId || responseData.post?._id || responseData.post?.id || '',
-        triggerWords: triggerWords || 'link,store,recommendations',
+        triggerWords: uniqueTriggers,
       },
     });
 

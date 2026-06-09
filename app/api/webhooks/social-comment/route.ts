@@ -21,6 +21,7 @@ export async function POST(request: Request) {
     let platform = 'instagram';
     let commentId = '';
     let postRefId = '';
+    let recipientId = '';
     let accountId = body.accountId || body.account?.id || body.data?.account?.id || '';
     const socialPostId = body.socialPostId; // For simulation direct mapping
     const isSimulation = !!body.isSimulation;
@@ -37,6 +38,7 @@ export async function POST(request: Request) {
                  'anonymous';
       platform = body.platform || (body.data && body.data.platform) || 'instagram';
       postRefId = zComment.platformPostId || zPost.platformPostId || zPost.id || body.postId || body.postRefId;
+      recipientId = zComment.author?.id || zComment.user?.id || '';
     } else {
       // Ayrshare/Upload-Post or simulator payload format
       commentId = body.commentId || body.id || `sim_${Date.now()}`;
@@ -44,6 +46,7 @@ export async function POST(request: Request) {
       username = body.username || body.user || 'anonymous';
       platform = body.platform || 'instagram';
       postRefId = body.postRefId || body.postId || body.ayrshareId;
+      recipientId = body.recipientId || body.user_id || '';
     }
 
     if (!commentText) {
@@ -128,17 +131,25 @@ export async function POST(request: Request) {
       targetName = socialPost.product.title;
     }
 
-    const responseText = `@${username} Here is the link to ${targetName}! ${link} ✨`;
+    const isInstagram = platform === 'instagram';
+    const dmText = `Hello! Here is the link to ${targetName}: ${link} ✨`;
+    const commentReplyText = isInstagram 
+      ? `@${username} Sent! Check your DMs 📥✨` 
+      : `@${username} Here is the link to ${targetName}! ${link} ✨`;
 
     // Process simulation
     if (isSimulation) {
+      const simulatedResponseSent = isInstagram 
+        ? `DM: "${dmText}" | Comment Reply: "${commentReplyText}"`
+        : commentReplyText;
+
       await prisma.interactionLog.create({
         data: {
           username,
           commentText,
           triggerWord: matchedTrigger,
           status: 'SENT (SIMULATED)',
-          responseSent: responseText,
+          responseSent: simulatedResponseSent,
           platform,
           socialPostId: socialPost.id,
         }
@@ -146,7 +157,8 @@ export async function POST(request: Request) {
       return NextResponse.json({
         success: true,
         simulated: true,
-        responseText,
+        responseText: commentReplyText,
+        dmText: isInstagram ? dmText : undefined,
         matchedTrigger
       });
     }
@@ -163,7 +175,7 @@ export async function POST(request: Request) {
           commentText,
           triggerWord: matchedTrigger,
           status: 'FAILED (API key not configured)',
-          responseSent: responseText,
+          responseSent: isInstagram ? `DM: "${dmText}" | Comment Reply: "${commentReplyText}"` : commentReplyText,
           platform,
           socialPostId: socialPost.id,
         }
@@ -172,53 +184,96 @@ export async function POST(request: Request) {
     }
 
     const replyPostId = socialPost.ayrshareRefId || postRefId || '';
-    console.log(`Sending auto-reply via Zernio for comment: ${commentId} on post: ${replyPostId}`);
     const replyUrl = `https://zernio.com/api/v1/inbox/comments/${replyPostId}`;
-    const response = await fetch(replyUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${zernio_api_key}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        accountId,
-        commentId,
-        message: responseText
-      })
-    });
 
-    const responseData = await response.json();
+    let dmSuccess = false;
+    let commentReplySuccess = false;
+    let errorMessage = '';
 
-    if (!response.ok || responseData.success === false || responseData.status === 'error') {
-      console.error('Zernio comment reply failed:', responseData);
-      await prisma.interactionLog.create({
-        data: {
-          username,
-          commentText,
-          triggerWord: matchedTrigger,
-          status: 'FAILED',
-          responseSent: responseText,
-          platform,
-          socialPostId: socialPost.id,
+    // 1. Send Instagram DM (if Instagram and recipientId is present)
+    if (isInstagram && recipientId) {
+      console.log(`Sending Instagram DM to user: ${recipientId} (${username}) via Zernio`);
+      try {
+        const dmRes = await fetch('https://zernio.com/api/v1/inbox/messages', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${zernio_api_key}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            accountId,
+            recipientId,
+            message: dmText
+          })
+        });
+        const dmData = await dmRes.json();
+        if (dmRes.ok && dmData.success !== false) {
+          dmSuccess = true;
+        } else {
+          console.error('Zernio DM reply failed:', dmData);
+          errorMessage += `DM failed: ${dmData.message || 'Unknown error'}. `;
         }
-      });
-      return NextResponse.json({ error: responseData.message || 'Failed to reply to comment' }, { status: 500 });
+      } catch (err: any) {
+        console.error('Error sending Zernio DM:', err);
+        errorMessage += `DM error: ${err.message}. `;
+      }
     }
 
-    // Success log
+    // 2. Reply to the comment publicly
+    console.log(`Sending auto-reply comment via Zernio for comment: ${commentId} on post: ${replyPostId}`);
+    try {
+      const commentRes = await fetch(replyUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${zernio_api_key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          accountId,
+          commentId,
+          message: commentReplyText
+        })
+      });
+      const commentData = await commentRes.json();
+      if (commentRes.ok && commentData.success !== false && commentData.status !== 'error') {
+        commentReplySuccess = true;
+      } else {
+        console.error('Zernio comment reply failed:', commentData);
+        errorMessage += `Comment reply failed: ${commentData.message || 'Unknown error'}. `;
+      }
+    } catch (err: any) {
+      console.error('Error sending Zernio comment reply:', err);
+      errorMessage += `Comment reply error: ${err.message}. `;
+    }
+
+    // Determine overall status
+    const overallSuccess = isInstagram 
+      ? (dmSuccess && commentReplySuccess)
+      : commentReplySuccess;
+
+    const logStatus = overallSuccess ? 'SENT' : `FAILED (${errorMessage.trim()})`;
+    const logResponseSent = isInstagram 
+      ? `DM [${dmSuccess ? 'OK' : 'FAIL'}]: "${dmText}" | Comment Reply [${commentReplySuccess ? 'OK' : 'FAIL'}]: "${commentReplyText}"`
+      : commentReplyText;
+
+    // Save final status log
     await prisma.interactionLog.create({
       data: {
         username,
         commentText,
         triggerWord: matchedTrigger,
-        status: 'SENT',
-        responseSent: responseText,
+        status: logStatus,
+        responseSent: logResponseSent,
         platform,
         socialPostId: socialPost.id,
       }
     });
 
-    return NextResponse.json({ success: true, responseText });
+    if (!overallSuccess) {
+      return NextResponse.json({ error: errorMessage.trim() || 'Failed to reply to comment' }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, responseText: commentReplyText });
   } catch (error: any) {
     console.error('Comment responder webhook error:', error);
     return NextResponse.json({ error: error.message || 'Webhook processing failed' }, { status: 500 });
