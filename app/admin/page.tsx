@@ -150,7 +150,10 @@ export default function AdminPage() {
   // Generated Social Media Drafts
   const [socialDrafts, setSocialDrafts] = useState({
     instagramPost: '',
+    instagramFirstComment: '',
     pinterestPost: '',
+    pinterestTitle: '',
+    pinterestLink: '',
   });
 
   // UI States
@@ -782,7 +785,10 @@ export default function AdminPage() {
 
       setSocialDrafts({
         instagramPost: data.instagramPost || '',
+        instagramFirstComment: '',
         pinterestPost: data.pinterestPost || '',
+        pinterestTitle: '',
+        pinterestLink: '',
       });
 
       showMessage('AI theme title, description, and social posts generated in Panel 2 & 3!');
@@ -920,7 +926,10 @@ export default function AdminPage() {
             originalProductImage: curatedProduct.originalProductImage,
             socialDrafts: {
               instagram: igContent,
+              instagramFirstComment: socialDrafts.instagramFirstComment || '',
               pinterest: pinContent,
+              pinterestTitle: socialDrafts.pinterestTitle || '',
+              pinterestLink: socialDrafts.pinterestLink || '',
             }
           }),
         }),
@@ -935,7 +944,10 @@ export default function AdminPage() {
       // Sync drafts visually in UI
       setSocialDrafts({
         instagramPost: igContent,
+        instagramFirstComment: socialDrafts.instagramFirstComment,
         pinterestPost: pinContent,
+        pinterestTitle: socialDrafts.pinterestTitle,
+        pinterestLink: socialDrafts.pinterestLink,
       });
 
       showMessage(curatedProduct.id ? 'Product listing updated!' : 'Product listing saved to catalog!');
@@ -963,7 +975,13 @@ export default function AdminPage() {
     let originalPromptStr = '';
     let rawDescriptionStr = '';
     let originalProductImageStr = '';
-    let socialDraftsObj = { instagram: '', pinterest: '' };
+    let socialDraftsObj = {
+      instagram: '',
+      instagramFirstComment: '',
+      pinterest: '',
+      pinterestTitle: '',
+      pinterestLink: '',
+    };
 
     try { prosArr = JSON.parse(prod.pros); } catch(_) {}
     try { consArr = JSON.parse(prod.cons); } catch(_) {}
@@ -977,7 +995,10 @@ export default function AdminPage() {
         if (galleryData.socialDrafts) {
           socialDraftsObj = {
             instagram: galleryData.socialDrafts.instagram || '',
+            instagramFirstComment: galleryData.socialDrafts.instagramFirstComment || '',
             pinterest: galleryData.socialDrafts.pinterest || '',
+            pinterestTitle: galleryData.socialDrafts.pinterestTitle || '',
+            pinterestLink: galleryData.socialDrafts.pinterestLink || '',
           };
         }
       }
@@ -1004,7 +1025,10 @@ export default function AdminPage() {
 
     setSocialDrafts({
       instagramPost: socialDraftsObj.instagram || `${prod.title}\n\n${prod.customDescription}\n\nCheck the link in our bio to find this deal! 🏠✨\n\n#cozyhome #decor #lifestyle`,
+      instagramFirstComment: socialDraftsObj.instagramFirstComment || '',
       pinterestPost: socialDraftsObj.pinterest || `${prod.title} - ${prod.customDescription}\n\nPin this to save for later!`,
+      pinterestTitle: socialDraftsObj.pinterestTitle || '',
+      pinterestLink: socialDraftsObj.pinterestLink || '',
     });
 
     setActiveTab('curator');
@@ -1093,12 +1117,20 @@ export default function AdminPage() {
         ? [`${origin}/api/images/${curatedProduct.id}`]
         : (curatedProduct.mainImage && curatedProduct.mainImage.startsWith('http') ? [curatedProduct.mainImage] : undefined);
 
-      const payload = {
+      const payload: any = {
         productId: curatedProduct.id || undefined,
         postContent: finalContent,
         platforms: [platform],
         mediaUrls: mediaUrls,
       };
+
+      if (platform === 'instagram' && socialDrafts.instagramFirstComment) {
+        payload.instagramFirstComment = socialDrafts.instagramFirstComment;
+      }
+      if (platform === 'pinterest') {
+        payload.pinterestTitle = socialDrafts.pinterestTitle || undefined;
+        payload.pinterestLink = socialDrafts.pinterestLink || undefined;
+      }
 
       const res = await fetch('/api/publish-social', {
         method: 'POST',
@@ -1153,7 +1185,10 @@ export default function AdminPage() {
     // Sync drafts visually in UI
     setSocialDrafts({
       instagramPost: igContent,
+      instagramFirstComment: socialDrafts.instagramFirstComment,
       pinterestPost: pinContent,
+      pinterestTitle: socialDrafts.pinterestTitle,
+      pinterestLink: socialDrafts.pinterestLink,
     });
 
     const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
@@ -1163,12 +1198,20 @@ export default function AdminPage() {
 
     for (const item of platformsToPost) {
       try {
-        const payload = {
+        const payload: any = {
           productId: curatedProduct.id || undefined,
           postContent: item.content,
           platforms: [item.name],
           mediaUrls: mediaUrls,
         };
+
+        if (item.name === 'instagram' && socialDrafts.instagramFirstComment) {
+          payload.instagramFirstComment = socialDrafts.instagramFirstComment;
+        }
+        if (item.name === 'pinterest') {
+          payload.pinterestTitle = socialDrafts.pinterestTitle || undefined;
+          payload.pinterestLink = socialDrafts.pinterestLink || undefined;
+        }
 
         const res = await fetch('/api/publish-social', {
           method: 'POST',
@@ -1907,6 +1950,24 @@ export default function AdminPage() {
                     value={socialDrafts.instagramPost}
                     onChange={(e) => setSocialDrafts(prev => ({ ...prev, instagramPost: e.target.value }))}
                   />
+                  <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <label style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-color)', opacity: 0.8 }}>First Comment (Optional)</label>
+                      <span style={{ fontSize: '9px', opacity: 0.6 }}>{(socialDrafts.instagramFirstComment || '').length}/2200</span>
+                    </div>
+                    <textarea 
+                      className="glass-input" 
+                      style={{ minHeight: '50px', fontSize: '11px', padding: '6px' }}
+                      placeholder="Drop any extra context or a CTA here."
+                      value={socialDrafts.instagramFirstComment || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val.length <= 2200) {
+                          setSocialDrafts(prev => ({ ...prev, instagramFirstComment: val }));
+                        }
+                      }}
+                    />
+                  </div>
                 </div>
 
                 {/* Pinterest Area */}
@@ -1937,6 +1998,43 @@ export default function AdminPage() {
                     value={socialDrafts.pinterestPost}
                     onChange={(e) => setSocialDrafts(prev => ({ ...prev, pinterestPost: e.target.value }))}
                   />
+                  <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {/* Pinterest Title */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <label style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-color)', opacity: 0.8 }}>Title (Optional)</label>
+                        <span style={{ fontSize: '9px', opacity: 0.6 }}>{(socialDrafts.pinterestTitle || '').length}/100</span>
+                      </div>
+                      <input 
+                        type="text"
+                        className="glass-input" 
+                        style={{ fontSize: '11px', padding: '6px' }}
+                        placeholder="Enter a custom title for your Pin..."
+                        value={socialDrafts.pinterestTitle || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val.length <= 100) {
+                            setSocialDrafts(prev => ({ ...prev, pinterestTitle: val }));
+                          }
+                        }}
+                      />
+                      <p style={{ fontSize: '9px', opacity: 0.6, margin: '0' }}>Custom title for your Pin. If not provided, the first line of the main content will be used.</p>
+                    </div>
+
+                    {/* Pinterest Destination Link */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-color)', opacity: 0.8 }}>Destination Link (Optional)</label>
+                      <input 
+                        type="text"
+                        className="glass-input" 
+                        style={{ fontSize: '11px', padding: '6px' }}
+                        placeholder="https://example.com/your-landing-page"
+                        value={socialDrafts.pinterestLink || ''}
+                        onChange={(e) => setSocialDrafts(prev => ({ ...prev, pinterestLink: e.target.value }))}
+                      />
+                      <p style={{ fontSize: '9px', opacity: 0.6, margin: '0' }}>Set the clickable URL for your Pin. This becomes the Pin's outbound link.</p>
+                    </div>
+                  </div>
                 </div>
 
               </div>

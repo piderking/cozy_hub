@@ -15,7 +15,17 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { productId, collectionId, postContent, platforms, mediaUrls, triggerWords } = body;
+    const { 
+      productId, 
+      collectionId, 
+      postContent, 
+      platforms, 
+      mediaUrls, 
+      triggerWords,
+      instagramFirstComment,
+      pinterestTitle,
+      pinterestLink 
+    } = body;
 
     if (!postContent || !platforms || !Array.isArray(platforms) || platforms.length === 0) {
       return NextResponse.json({ error: 'Post content and at least one target platform are required' }, { status: 400 });
@@ -70,24 +80,28 @@ export async function POST(request: Request) {
         );
       }
       
-      let pinterestLink = origin;
-      if (collection) {
-        pinterestLink = `${origin}/collections/${collection.slug}`;
-      } else if (product?.affiliateUrl) {
-        pinterestLink = product.affiliateUrl;
+      let finalPinterestLink = pinterestLink;
+      if (!finalPinterestLink) {
+        finalPinterestLink = origin;
+        if (collection) {
+          finalPinterestLink = `${origin}/collections/${collection.slug}`;
+        } else if (product?.affiliateUrl) {
+          finalPinterestLink = product.affiliateUrl;
+        }
       }
+
+      const finalPinterestTitle = pinterestTitle || postTitle;
 
       pinterestOptions = {
         boardId: pinterest_board_id,
         board_id: pinterest_board_id,
-        title: postTitle,
-        link: pinterestLink
+        title: finalPinterestTitle,
+        link: finalPinterestLink
       };
     }
 
-    // Prepare media URLs and media IDs
+    // Prepare media URLs
     const zernioMediaUrls: string[] = [];
-    const zernioMediaIds: string[] = [];
 
     if (mediaUrls && mediaUrls.length > 0) {
       for (const mediaUrl of mediaUrls) {
@@ -101,7 +115,7 @@ export async function POST(request: Request) {
               const fileBlob = new Blob([buffer], { type: contentType });
               
               const mediaFormData = new FormData();
-              mediaFormData.append('file', fileBlob, `image.${ext}`);
+              mediaFormData.append('files', fileBlob, `image.${ext}`);
               mediaFormData.append('type', 'image');
 
               console.log('Uploading base64 mockup image to Zernio...');
@@ -115,24 +129,69 @@ export async function POST(request: Request) {
 
               if (mediaRes.ok) {
                 const mediaData = await mediaRes.json();
-                const mediaId = mediaData.media_id || mediaData.id;
-                if (mediaId) {
-                  zernioMediaIds.push(mediaId);
-                  console.log(`Successfully uploaded base64 to Zernio. Media ID: ${mediaId}`);
+                const uploadedUrl = mediaData.files && mediaData.files[0] && mediaData.files[0].url;
+                if (uploadedUrl) {
+                  zernioMediaUrls.push(uploadedUrl);
+                  console.log(`Successfully uploaded base64 to Zernio. CDN URL: ${uploadedUrl}`);
                 } else {
-                  console.error('Zernio media upload succeeded but returned no ID:', mediaData);
+                  console.error('Zernio media upload succeeded but returned no files/url:', mediaData);
                 }
               } else {
                 const errText = await mediaRes.text();
                 console.error(`Zernio media upload failed with status ${mediaRes.status}:`, errText);
               }
             }
+          } else if (mediaUrl.startsWith('http') || mediaUrl.startsWith('/')) {
+            let absoluteUrl = mediaUrl;
+            if (mediaUrl.startsWith('/')) {
+              absoluteUrl = `${origin}${mediaUrl}`;
+            }
+
+            console.log(`Downloading and uploading image from URL to Zernio: ${absoluteUrl}`);
+            const imageFetchRes = await fetch(absoluteUrl);
+            if (imageFetchRes.ok) {
+              const contentType = imageFetchRes.headers.get('content-type') || 'image/png';
+              const buffer = Buffer.from(await imageFetchRes.arrayBuffer());
+              const fileBlob = new Blob([buffer], { type: contentType });
+              const ext = contentType.split('/')[1] || 'png';
+
+              const mediaFormData = new FormData();
+              mediaFormData.append('files', fileBlob, `image.${ext}`);
+              mediaFormData.append('type', 'image');
+
+              const mediaRes = await fetch('https://zernio.com/api/v1/media', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${zernio_api_key}`,
+                },
+                body: mediaFormData
+              });
+
+              if (mediaRes.ok) {
+                const mediaData = await mediaRes.json();
+                const uploadedUrl = mediaData.files && mediaData.files[0] && mediaData.files[0].url;
+                if (uploadedUrl) {
+                  zernioMediaUrls.push(uploadedUrl);
+                  console.log(`Successfully uploaded image URL to Zernio. CDN URL: ${uploadedUrl}`);
+                } else {
+                  console.error('Zernio media upload succeeded but returned no files/url:', mediaData);
+                  zernioMediaUrls.push(mediaUrl); // fallback
+                }
+              } else {
+                const errText = await mediaRes.text();
+                console.error(`Zernio media upload failed with status ${mediaRes.status}:`, errText);
+                zernioMediaUrls.push(mediaUrl); // fallback
+              }
+            } else {
+              console.error(`Failed to fetch image from URL: ${absoluteUrl}, status: ${imageFetchRes.status}`);
+              zernioMediaUrls.push(mediaUrl); // fallback
+            }
           } else {
-            // It's a remote URL. Zernio supports direct mediaUrls.
             zernioMediaUrls.push(mediaUrl);
           }
         } catch (err) {
           console.error('Error handling/attaching image for Zernio:', err);
+          zernioMediaUrls.push(mediaUrl); // fallback
         }
       }
     }
@@ -197,11 +256,12 @@ export async function POST(request: Request) {
       platforms: zernioPlatformsPayload
     };
 
+    if (instagramFirstComment && mappedPlatforms.includes('instagram')) {
+      zernioPayload.firstComment = instagramFirstComment;
+    }
+
     if (zernioMediaUrls.length > 0) {
       zernioPayload.mediaUrls = zernioMediaUrls;
-    }
-    if (zernioMediaIds.length > 0) {
-      zernioPayload.media_ids = zernioMediaIds;
     }
     if (pinterestOptions) {
       zernioPayload.pinterest_options = pinterestOptions;
