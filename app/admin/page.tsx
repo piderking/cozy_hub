@@ -810,8 +810,8 @@ export default function AdminPage() {
         instagramPost: data.instagramPost || '',
         instagramFirstComment: data.instagramFirstComment || '',
         pinterestPost: data.pinterestPost || '',
-        pinterestTitle: '',
-        pinterestLink: curatedProduct.affiliateUrl || '',
+        pinterestTitle: data.pinterestTitle || data.customTitle || curatedProduct.title || '',
+        pinterestLink: data.pinterestLink || curatedProduct.affiliateUrl || curatedProduct.originalUrl || '',
       });
 
       showMessage('AI theme title, description, and social posts generated in Panel 2 & 3!');
@@ -1050,8 +1050,8 @@ export default function AdminPage() {
       instagramPost: socialDraftsObj.instagram || `${prod.title}\n\n${prod.customDescription}\n\nCheck the link in our bio to find this deal! 🏠✨\n\n#cozyhome #decor #lifestyle`,
       instagramFirstComment: socialDraftsObj.instagramFirstComment || '',
       pinterestPost: socialDraftsObj.pinterest || `${prod.title} - ${prod.customDescription}\n\nPin this to save for later!`,
-      pinterestTitle: socialDraftsObj.pinterestTitle || '',
-      pinterestLink: socialDraftsObj.pinterestLink || '',
+      pinterestTitle: socialDraftsObj.pinterestTitle || prod.title || '',
+      pinterestLink: socialDraftsObj.pinterestLink || prod.affiliateUrl || prod.originalUrl || '',
     });
 
     setActiveTab('curator');

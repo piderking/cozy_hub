@@ -96,6 +96,8 @@ export async function POST(request: Request) {
     const origin = request.headers.get('origin') || 'http://localhost:3000';
     const zernioPlatformsPayload = [];
     let finalInstagramFirstComment = undefined;
+    let finalPinterestTitle = undefined;
+    let finalPinterestLink = undefined;
 
     for (const platInput of mappedPlatforms) {
       const platName = platInput.name;
@@ -116,13 +118,13 @@ export async function POST(request: Request) {
             );
           }
           
-          let finalPinterestLink = platInput.pinterestLink;
-          if (!finalPinterestLink) {
-            finalPinterestLink = origin;
+          let finalPinterestLinkVal = platInput.pinterestLink;
+          if (!finalPinterestLinkVal) {
+            finalPinterestLinkVal = origin;
             if (collection) {
-              finalPinterestLink = `${origin}/collections/${collection.slug}`;
+              finalPinterestLinkVal = `${origin}/collections/${collection.slug}`;
             } else if (product?.affiliateUrl) {
-              finalPinterestLink = product.affiliateUrl;
+              finalPinterestLinkVal = product.affiliateUrl;
             }
           }
 
@@ -142,15 +144,41 @@ export async function POST(request: Request) {
             postTitle = postTitle.substring(0, 92) + '...';
           }
 
-          platformObj.platformSpecificData = {
+          finalPinterestTitle = postTitle;
+          finalPinterestLink = finalPinterestLinkVal;
+
+          const pinterestOpts = {
             boardId: pinterest_board_id,
             title: postTitle,
-            link: finalPinterestLink,
+            link: finalPinterestLinkVal,
           };
+
+          platformObj.boardId = pinterest_board_id;
+          platformObj.title = postTitle;
+          platformObj.link = finalPinterestLinkVal;
+          platformObj.platformSpecificData = pinterestOpts;
+          platformObj.pinterestOptions = pinterestOpts;
+          platformObj.pinterest_options = pinterestOpts;
         }
 
-        if (platName === 'instagram' && platInput.instagramFirstComment) {
-          finalInstagramFirstComment = platInput.instagramFirstComment;
+        if (platName === 'instagram') {
+          const firstCommentText = platInput.instagramFirstComment || instagramFirstComment || '';
+          if (firstCommentText) {
+            finalInstagramFirstComment = firstCommentText;
+
+            platformObj.firstComment = firstCommentText;
+            platformObj.firstCommentText = firstCommentText;
+            platformObj.platformSpecificData = {
+              firstComment: firstCommentText,
+              firstCommentText: firstCommentText,
+            };
+            platformObj.instagramOptions = {
+              firstComment: firstCommentText,
+            };
+            platformObj.instagram_options = {
+              firstComment: firstCommentText,
+            };
+          }
         }
 
         zernioPlatformsPayload.push(platformObj);
@@ -303,17 +331,26 @@ export async function POST(request: Request) {
 
     if (finalInstagramFirstComment) {
       zernioPayload.firstComment = finalInstagramFirstComment;
+      zernioPayload.instagramOptions = {
+        firstComment: finalInstagramFirstComment
+      };
+      zernioPayload.instagram_options = {
+        firstComment: finalInstagramFirstComment
+      };
     }
 
     if (zernioMediaItems.length > 0) {
       zernioPayload.mediaItems = zernioMediaItems;
     }
 
-    // Keep compatibility with older Zernio schema versions
-    const pinPlatObj = zernioPlatformsPayload.find(p => p.platform === 'pinterest');
-    if (pinPlatObj && pinPlatObj.platformSpecificData) {
-      zernioPayload.pinterest_options = pinPlatObj.platformSpecificData;
-      zernioPayload.pinterestOptions = pinPlatObj.platformSpecificData;
+    if (finalPinterestTitle || finalPinterestLink) {
+      const pinterestOpts = {
+        boardId: pinterest_board_id,
+        title: finalPinterestTitle,
+        link: finalPinterestLink
+      };
+      zernioPayload.pinterestOptions = pinterestOpts;
+      zernioPayload.pinterest_options = pinterestOpts;
     }
 
     const response = await fetch('https://zernio.com/api/v1/posts', {
