@@ -12,6 +12,7 @@ export interface HubSettings {
   pinterest_board_id: string;
   amazon_tag: string;
   niche_prompt_directive: string;
+  store_url: string;
 }
 
 export const DEFAULT_SETTINGS: HubSettings = {
@@ -26,6 +27,7 @@ export const DEFAULT_SETTINGS: HubSettings = {
   pinterest_board_id: '',
   amazon_tag: 'cozyhub-20',
   niche_prompt_directive: 'You write product reviews for our catalog which focuses on warm, cozy, minimalist, and beautifully designed home decor, study spaces, kitchen gadgets, and comfort products. Keep the tone warm, welcoming, descriptive, and conversion-oriented.',
+  store_url: 'http://localhost:3000',
 };
 
 export async function getSettings(): Promise<HubSettings> {
@@ -45,6 +47,7 @@ export async function getSettings(): Promise<HubSettings> {
       pinterest_board_id: settingsMap.get('pinterest_board_id') ?? '',
       amazon_tag: settingsMap.get('amazon_tag') ?? DEFAULT_SETTINGS.amazon_tag,
       niche_prompt_directive: settingsMap.get('niche_prompt_directive') ?? DEFAULT_SETTINGS.niche_prompt_directive,
+      store_url: settingsMap.get('store_url') ?? DEFAULT_SETTINGS.store_url,
     };
   } catch (error) {
     console.error('Error fetching settings from database:', error);

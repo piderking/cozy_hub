@@ -118,8 +118,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, message: 'No trigger word matched' });
     }
 
-    // Determine the response link and text
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+    // Fetch settings to resolve target link domain
+    const settings = await getSettings();
+    const origin = settings.store_url || 'http://localhost:3000';
     let link = origin;
     let targetName = 'Cozy Hub';
 
@@ -164,7 +165,6 @@ export async function POST(request: Request) {
     }
 
     // Process real Zernio API Reply
-    const settings = await getSettings();
     const { zernio_api_key } = settings;
 
     if (!zernio_api_key || zernio_api_key.includes('your_')) {

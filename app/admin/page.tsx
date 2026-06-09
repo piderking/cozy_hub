@@ -58,6 +58,7 @@ interface HubSettings {
   pinterest_board_id: string;
   amazon_tag: string;
   niche_prompt_directive: string;
+  store_url: string;
 }
 
 export default function AdminPage() {
@@ -116,6 +117,7 @@ export default function AdminPage() {
     pinterest_board_id: '',
     amazon_tag: '',
     niche_prompt_directive: '',
+    store_url: '',
   });
 
   // Listings State
@@ -2109,6 +2111,19 @@ export default function AdminPage() {
                       onChange={(e) => setSettings(prev => ({ ...prev, amazon_tag: e.target.value }))}
                       placeholder="e.g. cozyhub-20"
                     />
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label>Store Base URL (Domain)</label>
+                    <input 
+                      type="text" 
+                      className="glass-input" 
+                      value={settings.store_url}
+                      onChange={(e) => setSettings(prev => ({ ...prev, store_url: e.target.value }))}
+                      placeholder="e.g. https://cozyhub-production.up.railway.app"
+                    />
+                    <p className="text-muted" style={{ fontSize: '11px', marginTop: '4px' }}>
+                      Used as the domain for product and collection links dispatched via Instagram auto-DMs.
+                    </p>
                   </div>
                 </div>
 
