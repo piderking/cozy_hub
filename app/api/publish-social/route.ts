@@ -27,81 +27,150 @@ export async function POST(request: Request) {
       pinterestLink 
     } = body;
 
-    if (!postContent || !platforms || !Array.isArray(platforms) || platforms.length === 0) {
-      return NextResponse.json({ error: 'Post content and at least one target platform are required' }, { status: 400 });
+    if (!platforms || !Array.isArray(platforms) || platforms.length === 0) {
+      return NextResponse.json({ error: 'At least one target platform is required' }, { status: 400 });
     }
 
     // Fetch product or collection details
     const product = productId ? await prisma.product.findUnique({ where: { id: productId } }) : null;
     const collection = collectionId ? await prisma.collection.findUnique({ where: { id: collectionId } }) : null;
 
-    // Map platforms, filtering out X / Twitter
-    const mappedPlatforms = platforms
-      .map(p => p.toLowerCase())
-      .filter(p => p !== 'x' && p !== 'twitter');
+    // Parse platforms array supporting both legacy string array and new unified config object array
+    const parsedPlatforms: Array<{
+      name: string;
+      content: string;
+      instagramFirstComment?: string;
+      pinterestTitle?: string;
+      pinterestLink?: string;
+    }> = [];
+
+    for (const p of platforms) {
+      if (typeof p === 'string') {
+        parsedPlatforms.push({
+          name: p.toLowerCase(),
+          content: postContent || '',
+          instagramFirstComment: instagramFirstComment,
+          pinterestTitle: pinterestTitle,
+          pinterestLink: pinterestLink
+        });
+      } else if (p && typeof p === 'object' && p.name) {
+        parsedPlatforms.push({
+          name: p.name.toLowerCase(),
+          content: p.content || postContent || '',
+          instagramFirstComment: p.instagramFirstComment || instagramFirstComment,
+          pinterestTitle: p.pinterestTitle || pinterestTitle,
+          pinterestLink: p.pinterestLink || pinterestLink
+        });
+      }
+    }
+
+    // Filter out X / Twitter
+    const mappedPlatforms = parsedPlatforms.filter(p => p.name !== 'x' && p.name !== 'twitter');
 
     if (mappedPlatforms.length === 0) {
       return NextResponse.json({ error: 'No valid platforms selected. Twitter/X is not supported.' }, { status: 400 });
     }
 
-    // Ensure title is short (Pinterest limits title to 100 chars max)
-    let postTitle = 'Cozy Hub Recommendation';
-    if (product?.title) {
-      postTitle = product.title;
-    } else if (collection?.title) {
-      postTitle = collection.title;
-    } else {
-      const firstLine = postContent.split('\n')[0].trim().replace(/^[^a-zA-Z0-9]+/, '');
-      if (firstLine && firstLine.length > 3) {
-        postTitle = firstLine;
-      } else {
-        postTitle = postContent;
-      }
-    }
-    if (postTitle.length > 95) {
-      postTitle = postTitle.substring(0, 92) + '...';
+    // Use first platform caption or root caption as fallback
+    const mainContent = mappedPlatforms[0]?.content || postContent || '';
+
+    // Fetch connected accounts from Zernio
+    console.log('Fetching connected accounts from Zernio...');
+    const accountsRes = await fetch('https://zernio.com/api/v1/accounts', {
+      headers: {
+        'Authorization': `Bearer ${zernio_api_key}`,
+      },
+    });
+
+    if (!accountsRes.ok) {
+      const errText = await accountsRes.text();
+      return NextResponse.json(
+        { error: `Failed to fetch connected accounts from Zernio: ${errText}` },
+        { status: accountsRes.status }
+      );
     }
 
-    // Ensure description is under 500 characters for Pinterest limits
-    let postDescription = postContent;
-    if (mappedPlatforms.includes('pinterest') && postDescription.length > 500) {
-      postDescription = postDescription.substring(0, 495) + '...';
-    }
+    const accountsData = await accountsRes.json();
+    const accountsList = accountsData.accounts || [];
 
     const origin = request.headers.get('origin') || 'http://localhost:3000';
+    const zernioPlatformsPayload = [];
+    let finalInstagramFirstComment = undefined;
 
-    // Handle Pinterest Options
-    let pinterestOptions: any = undefined;
-    if (mappedPlatforms.includes('pinterest')) {
-      if (!pinterest_board_id) {
+    for (const platInput of mappedPlatforms) {
+      const platName = platInput.name;
+      const matchedAccount = accountsList.find((acc: any) => acc.platform === platName && acc.isActive !== false);
+
+      if (matchedAccount) {
+        const platformObj: any = {
+          platform: platName,
+          accountId: matchedAccount._id,
+          customContent: platInput.content
+        };
+
+        if (platName === 'pinterest') {
+          if (!pinterest_board_id) {
+            return NextResponse.json(
+              { error: 'Pinterest Board ID is required in settings to publish to Pinterest.' },
+              { status: 400 }
+            );
+          }
+          
+          let finalPinterestLink = platInput.pinterestLink;
+          if (!finalPinterestLink) {
+            finalPinterestLink = origin;
+            if (collection) {
+              finalPinterestLink = `${origin}/collections/${collection.slug}`;
+            } else if (product?.affiliateUrl) {
+              finalPinterestLink = product.affiliateUrl;
+            }
+          }
+
+          // Build post title for Pinterest
+          let postTitle = platInput.pinterestTitle;
+          if (!postTitle) {
+            if (product?.title) {
+              postTitle = product.title;
+            } else if (collection?.title) {
+              postTitle = collection.title;
+            } else {
+              const firstLine = platInput.content.split('\n')[0].trim().replace(/^[^a-zA-Z0-9]+/, '');
+              postTitle = firstLine || 'Cozy Hub Recommendation';
+            }
+          }
+          if (postTitle.length > 95) {
+            postTitle = postTitle.substring(0, 92) + '...';
+          }
+
+          platformObj.platformSpecificData = {
+            boardId: pinterest_board_id,
+            title: postTitle,
+            link: finalPinterestLink,
+          };
+        }
+
+        if (platName === 'instagram' && platInput.instagramFirstComment) {
+          finalInstagramFirstComment = platInput.instagramFirstComment;
+        }
+
+        zernioPlatformsPayload.push(platformObj);
+      } else {
         return NextResponse.json(
-          { error: 'Pinterest Board ID is required in settings to publish to Pinterest.' },
+          { error: `No active connected account found in Zernio for platform: ${platName}. Please link it in your Zernio dashboard first.` },
           { status: 400 }
         );
       }
-      
-      let finalPinterestLink = pinterestLink;
-      if (!finalPinterestLink) {
-        finalPinterestLink = origin;
-        if (collection) {
-          finalPinterestLink = `${origin}/collections/${collection.slug}`;
-        } else if (product?.affiliateUrl) {
-          finalPinterestLink = product.affiliateUrl;
-        }
-      }
-
-      const finalPinterestTitle = pinterestTitle || postTitle;
-
-      pinterestOptions = {
-        boardId: pinterest_board_id,
-        board_id: pinterest_board_id,
-        title: finalPinterestTitle,
-        link: finalPinterestLink
-      };
     }
 
-    // Prepare media URLs
-    const zernioMediaUrls: string[] = [];
+    if (zernioPlatformsPayload.length === 0) {
+      return NextResponse.json(
+        { error: 'No active connected social accounts found in Zernio for the selected platforms.' },
+        { status: 400 }
+      );
+    }
+
+    // Prepare media items using Zernio's files array schema
+    const zernioMediaItems: any[] = [];
 
     if (mediaUrls && mediaUrls.length > 0) {
       for (const mediaUrl of mediaUrls) {
@@ -129,10 +198,14 @@ export async function POST(request: Request) {
 
               if (mediaRes.ok) {
                 const mediaData = await mediaRes.json();
-                const uploadedUrl = mediaData.files && mediaData.files[0] && mediaData.files[0].url;
-                if (uploadedUrl) {
-                  zernioMediaUrls.push(uploadedUrl);
-                  console.log(`Successfully uploaded base64 to Zernio. CDN URL: ${uploadedUrl}`);
+                const uploadedFile = mediaData.files && mediaData.files[0];
+                if (uploadedFile && uploadedFile.url) {
+                  zernioMediaItems.push({
+                    type: uploadedFile.type || 'image',
+                    url: uploadedFile.url,
+                    filename: uploadedFile.filename || `image.${ext}`
+                  });
+                  console.log(`Successfully uploaded base64 to Zernio. CDN URL: ${uploadedFile.url}`);
                 } else {
                   console.error('Zernio media upload succeeded but returned no files/url:', mediaData);
                 }
@@ -169,103 +242,78 @@ export async function POST(request: Request) {
 
               if (mediaRes.ok) {
                 const mediaData = await mediaRes.json();
-                const uploadedUrl = mediaData.files && mediaData.files[0] && mediaData.files[0].url;
-                if (uploadedUrl) {
-                  zernioMediaUrls.push(uploadedUrl);
-                  console.log(`Successfully uploaded image URL to Zernio. CDN URL: ${uploadedUrl}`);
+                const uploadedFile = mediaData.files && mediaData.files[0];
+                if (uploadedFile && uploadedFile.url) {
+                  zernioMediaItems.push({
+                    type: uploadedFile.type || 'image',
+                    url: uploadedFile.url,
+                    filename: uploadedFile.filename || `image.${ext}`
+                  });
+                  console.log(`Successfully uploaded image URL to Zernio. CDN URL: ${uploadedFile.url}`);
                 } else {
                   console.error('Zernio media upload succeeded but returned no files/url:', mediaData);
-                  zernioMediaUrls.push(mediaUrl); // fallback
+                  zernioMediaItems.push({
+                    type: 'image',
+                    url: mediaUrl,
+                    filename: mediaUrl.split('/').pop() || 'image.png'
+                  });
                 }
               } else {
                 const errText = await mediaRes.text();
                 console.error(`Zernio media upload failed with status ${mediaRes.status}:`, errText);
-                zernioMediaUrls.push(mediaUrl); // fallback
+                zernioMediaItems.push({
+                  type: 'image',
+                  url: mediaUrl,
+                  filename: mediaUrl.split('/').pop() || 'image.png'
+                });
               }
             } else {
               console.error(`Failed to fetch image from URL: ${absoluteUrl}, status: ${imageFetchRes.status}`);
-              zernioMediaUrls.push(mediaUrl); // fallback
+              zernioMediaItems.push({
+                type: 'image',
+                url: mediaUrl,
+                filename: mediaUrl.split('/').pop() || 'image.png'
+              });
             }
           } else {
-            zernioMediaUrls.push(mediaUrl);
+            zernioMediaItems.push({
+              type: 'image',
+              url: mediaUrl,
+              filename: mediaUrl.split('/').pop() || 'image.png'
+            });
           }
         } catch (err) {
           console.error('Error handling/attaching image for Zernio:', err);
-          zernioMediaUrls.push(mediaUrl); // fallback
+          zernioMediaItems.push({
+            type: 'image',
+            url: mediaUrl,
+            filename: mediaUrl.split('/').pop() || 'image.png'
+          });
         }
       }
-    }
-
-    // Fetch connected accounts from Zernio
-    console.log('Fetching connected accounts from Zernio...');
-    const accountsRes = await fetch('https://zernio.com/api/v1/accounts', {
-      headers: {
-        'Authorization': `Bearer ${zernio_api_key}`,
-      },
-    });
-
-    if (!accountsRes.ok) {
-      const errText = await accountsRes.text();
-      return NextResponse.json(
-        { error: `Failed to fetch connected accounts from Zernio: ${errText}` },
-        { status: accountsRes.status }
-      );
-    }
-
-    const accountsData = await accountsRes.json();
-    const accountsList = accountsData.accounts || [];
-
-    const zernioPlatformsPayload = [];
-    for (const plat of mappedPlatforms) {
-      const matchedAccount = accountsList.find((acc: any) => acc.platform === plat && acc.isActive !== false);
-      if (matchedAccount) {
-        const platformObj: any = {
-          platform: plat,
-          accountId: matchedAccount._id,
-        };
-
-        if (plat === 'pinterest' && pinterestOptions) {
-          platformObj.platformSpecificData = {
-            boardId: pinterestOptions.boardId,
-            title: pinterestOptions.title,
-            link: pinterestOptions.link,
-          };
-        }
-
-        zernioPlatformsPayload.push(platformObj);
-      } else {
-        return NextResponse.json(
-          { error: `No active connected account found in Zernio for platform: ${plat}. Please link it in your Zernio dashboard first.` },
-          { status: 400 }
-        );
-      }
-    }
-
-    if (zernioPlatformsPayload.length === 0) {
-      return NextResponse.json(
-        { error: 'No active connected social accounts found in Zernio for the selected platforms.' },
-        { status: 400 }
-      );
     }
 
     console.log(`Sending upload request to Zernio for platforms:`, JSON.stringify(zernioPlatformsPayload));
 
     // Call Zernio API
     const zernioPayload: any = {
-      content: postDescription,
+      content: mainContent,
       platforms: zernioPlatformsPayload
     };
 
-    if (instagramFirstComment && mappedPlatforms.includes('instagram')) {
-      zernioPayload.firstComment = instagramFirstComment;
+    if (finalInstagramFirstComment) {
+      zernioPayload.firstComment = finalInstagramFirstComment;
     }
 
-    if (zernioMediaUrls.length > 0) {
-      zernioPayload.mediaUrls = zernioMediaUrls;
+    if (zernioMediaItems.length > 0) {
+      zernioPayload.mediaItems = zernioMediaItems;
     }
-    if (pinterestOptions) {
-      zernioPayload.pinterest_options = pinterestOptions;
-      zernioPayload.pinterestOptions = pinterestOptions; // double-write for compatibility
+
+    // Keep compatibility with older Zernio schema versions
+    const pinPlatObj = zernioPlatformsPayload.find(p => p.platform === 'pinterest');
+    if (pinPlatObj && pinPlatObj.platformSpecificData) {
+      zernioPayload.pinterest_options = pinPlatObj.platformSpecificData;
+      zernioPayload.pinterestOptions = pinPlatObj.platformSpecificData;
     }
 
     const response = await fetch('https://zernio.com/api/v1/posts', {
@@ -287,8 +335,8 @@ export async function POST(request: Request) {
         data: {
           productId: productId || null,
           collectionId: collectionId || null,
-          platform: platforms.join(', '),
-          generatedContent: postContent,
+          platform: mappedPlatforms.map(p => p.name).join(', '),
+          generatedContent: mappedPlatforms.map(p => `${p.name}: ${p.content}`).join('\n\n'),
           status: 'FAILED',
           triggerWords: triggerWords || 'link,store,recommendations',
         },
@@ -301,13 +349,12 @@ export async function POST(request: Request) {
     }
 
     // Save successful post record to the database
-    // Note: Zernio returns the post ID in responseData.id
     await prisma.socialPost.create({
       data: {
         productId: productId || null,
         collectionId: collectionId || null,
-        platform: platforms.join(', '),
-        generatedContent: postContent,
+        platform: mappedPlatforms.map(p => p.name).join(', '),
+        generatedContent: mappedPlatforms.map(p => `${p.name}: ${p.content}`).join('\n\n'),
         status: 'SENT',
         ayrshareRefId: responseData.id || responseData.postId || '',
         triggerWords: triggerWords || 'link,store,recommendations',

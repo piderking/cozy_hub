@@ -1117,20 +1117,24 @@ export default function AdminPage() {
         ? [`${origin}/api/images/${curatedProduct.id}`]
         : (curatedProduct.mainImage && curatedProduct.mainImage.startsWith('http') ? [curatedProduct.mainImage] : undefined);
 
-      const payload: any = {
-        productId: curatedProduct.id || undefined,
-        postContent: finalContent,
-        platforms: [platform],
-        mediaUrls: mediaUrls,
+      const platObj: any = {
+        name: platform,
+        content: finalContent
       };
 
       if (platform === 'instagram' && socialDrafts.instagramFirstComment) {
-        payload.instagramFirstComment = socialDrafts.instagramFirstComment;
+        platObj.instagramFirstComment = socialDrafts.instagramFirstComment;
       }
       if (platform === 'pinterest') {
-        payload.pinterestTitle = socialDrafts.pinterestTitle || undefined;
-        payload.pinterestLink = socialDrafts.pinterestLink || undefined;
+        platObj.pinterestTitle = socialDrafts.pinterestTitle || undefined;
+        platObj.pinterestLink = socialDrafts.pinterestLink || undefined;
       }
+
+      const payload = {
+        productId: curatedProduct.id || undefined,
+        mediaUrls: mediaUrls,
+        platforms: [platObj],
+      };
 
       const res = await fetch('/api/publish-social', {
         method: 'POST',
@@ -1163,20 +1167,31 @@ export default function AdminPage() {
   // Publish to ALL Socials at once (Instagram, Pinterest)
   const handlePublishToAllSocials = async () => {
     setLoading(prev => ({ ...prev, publish: true }));
-    let successCount = 0;
-    const failedPlatforms: string[] = [];
 
     const defaultInsta = `#ad ✨ ${curatedProduct.title}\n\n${curatedProduct.customDescription || curatedProduct.rawDescription}\n\nCheck the link in our bio to find this deal! 🏠✨\n\n#cozyhome #decor #lifestyle`;
     const defaultPin = `#ad 📌 ${curatedProduct.title} - ${curatedProduct.customDescription || curatedProduct.rawDescription}\n\nPin this to save for later!`;
 
-    const platformsToPost = [];
+    const platformsList: any[] = [];
     const igContent = socialDrafts.instagramPost.trim() || defaultInsta;
     const pinContent = socialDrafts.pinterestPost.trim() || defaultPin;
 
-    if (igContent) platformsToPost.push({ name: 'instagram', content: igContent });
-    if (pinContent) platformsToPost.push({ name: 'pinterest', content: pinContent });
+    if (igContent) {
+      platformsList.push({
+        name: 'instagram',
+        content: igContent,
+        instagramFirstComment: socialDrafts.instagramFirstComment || undefined
+      });
+    }
+    if (pinContent) {
+      platformsList.push({
+        name: 'pinterest',
+        content: pinContent,
+        pinterestTitle: socialDrafts.pinterestTitle || undefined,
+        pinterestLink: socialDrafts.pinterestLink || undefined
+      });
+    }
 
-    if (platformsToPost.length === 0) {
+    if (platformsList.length === 0) {
       showMessage('No social drafts are ready to publish.', 'error');
       setLoading(prev => ({ ...prev, publish: false }));
       return;
@@ -1196,45 +1211,30 @@ export default function AdminPage() {
       ? [`${origin}/api/images/${curatedProduct.id}`]
       : (curatedProduct.mainImage && curatedProduct.mainImage.startsWith('http') ? [curatedProduct.mainImage] : undefined);
 
-    for (const item of platformsToPost) {
-      try {
-        const payload: any = {
-          productId: curatedProduct.id || undefined,
-          postContent: item.content,
-          platforms: [item.name],
-          mediaUrls: mediaUrls,
-        };
+    try {
+      const payload = {
+        productId: curatedProduct.id || undefined,
+        mediaUrls: mediaUrls,
+        platforms: platformsList
+      };
 
-        if (item.name === 'instagram' && socialDrafts.instagramFirstComment) {
-          payload.instagramFirstComment = socialDrafts.instagramFirstComment;
-        }
-        if (item.name === 'pinterest') {
-          payload.pinterestTitle = socialDrafts.pinterestTitle || undefined;
-          payload.pinterestLink = socialDrafts.pinterestLink || undefined;
-        }
+      const res = await fetch('/api/publish-social', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
 
-        const res = await fetch('/api/publish-social', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
+      const data = await res.json();
 
-        if (res.ok) {
-          successCount++;
-        } else {
-          const data = await res.json().catch(() => ({}));
-          failedPlatforms.push(`${item.name}: ${data.error || 'Unknown error'}`);
-        }
-      } catch (err: any) {
-        failedPlatforms.push(`${item.name}: ${err.message || 'Unknown error'}`);
+      if (res.ok) {
+        showMessage(`Successfully posted to all ${platformsList.length} platforms via Zernio!`);
+      } else {
+        showMessage(`Publishing failed: ${data.error || 'Unknown error'}`, 'error');
       }
-    }
-
-    setLoading(prev => ({ ...prev, publish: false }));
-    if (failedPlatforms.length === 0) {
-      showMessage(`Successfully posted to all ${successCount} platforms!`);
-    } else {
-      showMessage(`Posted to ${successCount} platforms. Failed for: ${failedPlatforms.join(' | ')}`, 'error');
+    } catch (err: any) {
+      showMessage(`Publishing failed: ${err.message || 'Unknown error'}`, 'error');
+    } finally {
+      setLoading(prev => ({ ...prev, publish: false }));
     }
   };
 
