@@ -808,10 +808,10 @@ export default function AdminPage() {
 
       setSocialDrafts({
         instagramPost: data.instagramPost || '',
-        instagramFirstComment: '',
+        instagramFirstComment: data.instagramFirstComment || '',
         pinterestPost: data.pinterestPost || '',
         pinterestTitle: '',
-        pinterestLink: '',
+        pinterestLink: curatedProduct.affiliateUrl || '',
       });
 
       showMessage('AI theme title, description, and social posts generated in Panel 2 & 3!');

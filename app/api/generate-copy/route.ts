@@ -38,8 +38,9 @@ Do NOT mention any pricing or cost in the catalog description or social media po
 Write the following:
 1. Custom Title: A clean, aesthetic, and themed title for the product listing with an emoji (e.g. "Minimalist Walnut Desk Lamp 💡" instead of the original long junk-filled Amazon title).
 2. Custom Description: A rich, paragraph-based website review/description (150-250 words) with emojis that describes the product, why it's great, and how it fits into the brand's style/niche.
-3. Instagram Caption: Engaging, pretty caption. The first line must contain the affiliate disclosure (e.g. "#ad ✨ [Title]"), followed by a visual hook, body paragraphs, emojis, a call-to-action instructing users to comment or DM a specific trigger word (e.g., "DM 'product' or comment 'cozy' for the link! 🛍️"), and a block of 5 to 10 relevant, targeted hashtags (e.g., #homedecor #cozyhome etc.). CRITICAL: Do NOT put any URL link, web address, or link string in the Instagram caption text.
-4. Pinterest Pin Description: SEO-optimized, highly engaging description. The first line must contain the affiliate disclosure (e.g. "#ad 📌 [Title]"), emphasizing benefits, aesthetic appeal, emojis, and hashtags. CRITICAL: The entire Pinterest pin description text MUST be strictly under 480 characters to comply with Pinterest's maximum length limits. Do NOT put any URL link, website address, or link string in the Pinterest pin description text (it will be linked via the Pin metadata instead).
+3. Instagram Caption: Engaging, pretty caption. The first line must contain the affiliate disclosure (e.g. "#ad ✨ [Title]"), followed by a visual hook, body paragraphs, emojis, and a block of 5 to 10 relevant, targeted hashtags (e.g., #homedecor #cozyhome etc.). CRITICAL: Do NOT put any URL link, web address, link string, or the comment/DM call-to-action in the Instagram caption text.
+4. Instagram First Comment: A clean first comment containing the call-to-action instructing users to comment or DM a specific trigger word (e.g., "DM 'COZY' or comment 'DESK' for the link to shop! 🛍️✨").
+5. Pinterest Pin Description: SEO-optimized, highly engaging description. The first line must contain the affiliate disclosure (e.g. "#ad 📌 [Title]"), emphasizing benefits, aesthetic appeal, emojis, and hashtags. CRITICAL: The entire Pinterest pin description text MUST be strictly under 480 characters to comply with Pinterest's maximum length limits. Do NOT put any URL link, website address, or link string in the Pinterest pin description text (it will be linked via the Pin metadata instead).
 `;
 
     const prompt = `Generate copywriting for the following product:
@@ -53,14 +54,17 @@ Amazon Affiliate Link: ${affiliateUrl || ''}
 
 CRITICAL LINK RULES:
 1. Do NOT include the "Amazon Affiliate Link" or any other link/URL inside the post text or caption text for Instagram or Pinterest.
-   - For Instagram, include a clear instruction encouraging users to DM or comment a trigger word (e.g. "DM 'product' or comment 'cozy' for the link!").
-   - For Pinterest, write a description focusing purely on benefits and aesthetic appeal (without any URL string).
+2. For Instagram:
+   - Place the caption text in "instagramPost" (without any comment/DM call-to-action).
+   - Place the call-to-action (e.g., "DM 'COZY' or comment 'DESK' for the link to shop! 🛍️✨") in "instagramFirstComment".
+3. For Pinterest, write a description focusing purely on benefits and aesthetic appeal (without any URL string).
 
 Return the outputs strictly in JSON format with these exact keys:
 {
   "customTitle": "Clean aesthetic product title...",
   "customDescription": "Web review paragraph...",
   "instagramPost": "Instagram caption text...",
+  "instagramFirstComment": "Instagram first comment with trigger CTA...",
   "pinterestPost": "Pinterest pin description..."
 }`;
 

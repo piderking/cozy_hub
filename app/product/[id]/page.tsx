@@ -93,23 +93,35 @@ export default async function ProductDetailPage({ params }: PageProps) {
           )}
 
           {/* View Deal Call To Action */}
-          <a 
-            href={product.affiliateUrl} 
-            target="_blank" 
-            rel="noopener noreferrer" 
-            className="glass-button"
-            style={{ 
-              display: 'inline-flex', 
-              padding: '16px 36px', 
-              fontSize: '16px', 
-              borderRadius: '12px', 
-              width: '100%', 
-              justifyContent: 'center',
-              textShadow: '0 1px 2px rgba(0,0,0,0.2)'
-            }}
-          >
-            Buy on Amazon <ExternalLink size={18} />
-          </a>
+          {(() => {
+            let buyLink = product.affiliateUrl || product.originalUrl;
+            if (settings.amazon_tag) {
+              try {
+                const urlObj = new URL(product.originalUrl);
+                urlObj.searchParams.set('tag', settings.amazon_tag);
+                buyLink = urlObj.toString();
+              } catch (_) {}
+            }
+            return (
+              <a 
+                href={buyLink} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="glass-button"
+                style={{ 
+                  display: 'inline-flex', 
+                  padding: '16px 36px', 
+                  fontSize: '16px', 
+                  borderRadius: '12px', 
+                  width: '100%', 
+                  justifyContent: 'center',
+                  textShadow: '0 1px 2px rgba(0,0,0,0.2)'
+                }}
+              >
+                Buy on Amazon <ExternalLink size={18} />
+              </a>
+            );
+          })()}
 
           {/* Amazon Disclaimer disclosure */}
           <p className="text-muted" style={{ fontSize: '12px', textAlign: 'center', marginTop: '12px', fontStyle: 'italic', opacity: 0.9 }}>

@@ -142,15 +142,27 @@ export default async function CollectionDetailPage({ params }: PageProps) {
                 </p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
-                  <a 
-                    href={product.affiliateUrl} 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    className="glass-button"
-                    style={{ width: '100%', display: 'inline-flex', justifyContent: 'center', gap: '8px', fontSize: '13px', padding: '10px 16px' }}
-                  >
-                    Buy on Amazon <ExternalLink size={14} />
-                  </a>
+                  {(() => {
+                    let buyLink = product.affiliateUrl || product.originalUrl;
+                    if (settings.amazon_tag) {
+                      try {
+                        const urlObj = new URL(product.originalUrl);
+                        urlObj.searchParams.set('tag', settings.amazon_tag);
+                        buyLink = urlObj.toString();
+                      } catch (_) {}
+                    }
+                    return (
+                      <a 
+                        href={buyLink} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="glass-button"
+                        style={{ width: '100%', display: 'inline-flex', justifyContent: 'center', gap: '8px', fontSize: '13px', padding: '10px 16px' }}
+                      >
+                        Buy on Amazon <ExternalLink size={14} />
+                      </a>
+                    );
+                  })()}
                   <a 
                     href={`/product/${product.id}`}
                     style={{ textAlign: 'center', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}
