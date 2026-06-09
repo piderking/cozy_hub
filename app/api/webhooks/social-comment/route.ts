@@ -49,6 +49,18 @@ export async function POST(request: Request) {
       recipientId = body.recipientId || body.user_id || '';
     }
 
+    // Fetch settings to check bot username
+    const settings = await getSettings();
+
+    // Prevent loop: do not respond to comments made by the bot itself
+    const botUsername = (settings.bot_username || '_cozy_hub').trim().toLowerCase().replace(/^@/, '');
+    const senderUsername = username.trim().toLowerCase().replace(/^@/, '');
+
+    if (senderUsername === botUsername) {
+      console.log(`Ignoring comment from own bot username: ${senderUsername}`);
+      return NextResponse.json({ success: true, message: 'Ignored comment from own bot username' });
+    }
+
     if (!commentText) {
       return NextResponse.json({ success: true, message: 'Ignored empty comment' });
     }
@@ -118,8 +130,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, message: 'No trigger word matched' });
     }
 
-    // Fetch settings to resolve target link domain
-    const settings = await getSettings();
+    // Resolve target link domain using previously fetched settings
     const origin = settings.store_url || 'http://localhost:3000';
     let link = origin;
     let targetName = 'Cozy Hub';

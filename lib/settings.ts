@@ -13,6 +13,7 @@ export interface HubSettings {
   amazon_tag: string;
   niche_prompt_directive: string;
   store_url: string;
+  bot_username: string;
 }
 
 export const DEFAULT_SETTINGS: HubSettings = {
@@ -28,6 +29,7 @@ export const DEFAULT_SETTINGS: HubSettings = {
   amazon_tag: 'cozyhub-20',
   niche_prompt_directive: 'You write product reviews for our catalog which focuses on warm, cozy, minimalist, and beautifully designed home decor, study spaces, kitchen gadgets, and comfort products. Keep the tone warm, welcoming, descriptive, and conversion-oriented.',
   store_url: 'http://localhost:3000',
+  bot_username: '_cozy_hub',
 };
 
 export async function getSettings(): Promise<HubSettings> {
@@ -48,6 +50,7 @@ export async function getSettings(): Promise<HubSettings> {
       amazon_tag: settingsMap.get('amazon_tag') ?? DEFAULT_SETTINGS.amazon_tag,
       niche_prompt_directive: settingsMap.get('niche_prompt_directive') ?? DEFAULT_SETTINGS.niche_prompt_directive,
       store_url: settingsMap.get('store_url') ?? DEFAULT_SETTINGS.store_url,
+      bot_username: settingsMap.get('bot_username') ?? DEFAULT_SETTINGS.bot_username,
     };
   } catch (error) {
     console.error('Error fetching settings from database:', error);

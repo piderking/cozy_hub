@@ -59,6 +59,7 @@ interface HubSettings {
   amazon_tag: string;
   niche_prompt_directive: string;
   store_url: string;
+  bot_username: string;
 }
 
 export default function AdminPage() {
@@ -118,6 +119,7 @@ export default function AdminPage() {
     amazon_tag: '',
     niche_prompt_directive: '',
     store_url: '',
+    bot_username: '',
   });
 
   // Listings State
@@ -2123,6 +2125,19 @@ export default function AdminPage() {
                     />
                     <p className="text-muted" style={{ fontSize: '11px', marginTop: '4px' }}>
                       Used as the domain for product and collection links dispatched via Instagram auto-DMs.
+                    </p>
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label>Instagram Account Username</label>
+                    <input 
+                      type="text" 
+                      className="glass-input" 
+                      value={settings.bot_username || ''}
+                      onChange={(e) => setSettings(prev => ({ ...prev, bot_username: e.target.value }))}
+                      placeholder="e.g. _cozy_hub"
+                    />
+                    <p className="text-muted" style={{ fontSize: '11px', marginTop: '4px' }}>
+                      The bot's own social media username. Webhooks originating from comments by this user will be ignored.
                     </p>
                   </div>
                 </div>
