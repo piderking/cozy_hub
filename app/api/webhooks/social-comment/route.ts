@@ -31,7 +31,10 @@ export async function POST(request: Request) {
       const zPost = body.post || (body.data && body.data.post) || {};
       commentId = zComment.id || zComment.commentId || body.id || `sim_${Date.now()}`;
       commentText = (zComment.text || zComment.content || '').trim();
-      username = zComment.username || (zComment.user && zComment.user.username) || zComment.author || 'anonymous';
+      username = zComment.username || 
+                 (zComment.user && zComment.user.username) || 
+                 (zComment.author && typeof zComment.author === 'object' ? zComment.author.username : zComment.author) || 
+                 'anonymous';
       platform = body.platform || (body.data && body.data.platform) || 'instagram';
       postRefId = zComment.platformPostId || zPost.platformPostId || zPost.id || body.postId || body.postRefId;
     } else {
@@ -54,11 +57,33 @@ export async function POST(request: Request) {
         where: { id: socialPostId },
         include: { product: true, collection: true }
       });
-    } else if (postRefId) {
-      socialPost = await prisma.socialPost.findFirst({
-        where: { ayrshareRefId: postRefId },
-        include: { product: true, collection: true }
-      });
+    }
+
+    if (!socialPost) {
+      // Collect all possible reference IDs from the payload to query robustly
+      const refIds = new Set<string>();
+      
+      const zComment = body.comment || (body.data && body.data.comment) || {};
+      const zPost = body.post || (body.data && body.data.post) || {};
+      
+      if (zComment.postId) refIds.add(zComment.postId);
+      if (zComment.platformPostId) refIds.add(zComment.platformPostId);
+      if (zPost.id) refIds.add(zPost.id);
+      if (zPost.platformPostId) refIds.add(zPost.platformPostId);
+      
+      if (postRefId) refIds.add(postRefId);
+      if (body.postId) refIds.add(body.postId);
+      if (body.postRefId) refIds.add(body.postRefId);
+      if (body.ayrshareId) refIds.add(body.ayrshareId);
+
+      const uniqueRefIds = Array.from(refIds).filter(Boolean);
+
+      if (uniqueRefIds.length > 0) {
+        socialPost = await prisma.socialPost.findFirst({
+          where: { ayrshareRefId: { in: uniqueRefIds } },
+          include: { product: true, collection: true }
+        });
+      }
     }
 
     if (!socialPost) {
@@ -146,8 +171,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Zernio API key not configured' }, { status: 400 });
     }
 
-    console.log(`Sending auto-reply via Zernio for comment: ${commentId} on post: ${postRefId}`);
-    const replyUrl = `https://zernio.com/api/v1/inbox/comments/${postRefId || socialPost.ayrshareRefId}`;
+    const replyPostId = socialPost.ayrshareRefId || postRefId || '';
+    console.log(`Sending auto-reply via Zernio for comment: ${commentId} on post: ${replyPostId}`);
+    const replyUrl = `https://zernio.com/api/v1/inbox/comments/${replyPostId}`;
     const response = await fetch(replyUrl, {
       method: 'POST',
       headers: {

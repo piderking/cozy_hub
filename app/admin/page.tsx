@@ -562,6 +562,27 @@ export default function AdminPage() {
     }
   };
 
+  // Remove social post trigger settings
+  const handleRemoveSocialPost = async (socialPostId: string) => {
+    if (!confirm('Are you sure you want to remove this post trigger and its responder settings?')) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/social-logs?postId=${socialPostId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        showMessage('Post trigger settings removed successfully!');
+        fetchResponderData();
+      } else {
+        const data = await res.json();
+        showMessage(data.error || 'Failed to remove post trigger settings', 'error');
+      }
+    } catch (err: any) {
+      showMessage(err.message, 'error');
+    }
+  };
+
   // Run webhook simulator
   const handleSimulateTrigger = async () => {
     if (!simForm.socialPostId) {
@@ -2627,7 +2648,8 @@ export default function AdminPage() {
                           <p style={{ fontSize: '12px', color: 'var(--text-muted)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginBottom: '12px' }}>
                             "{post.generatedContent}"
                           </p>
-                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+                            <span style={{ fontSize: '12px', opacity: 0.8 }}>Triggers:</span>
                             <input 
                               type="text" 
                               defaultValue={post.triggerWords || 'link,store,recommendations'}
@@ -2636,6 +2658,8 @@ export default function AdminPage() {
                               style={{ flex: 1, padding: '6px 12px', fontSize: '13px' }}
                               id={`trig-input-${post.id}`}
                             />
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                             <button 
                               className="glass-button secondary" 
                               style={{ padding: '6px 12px', fontSize: '12px' }}
@@ -2645,6 +2669,19 @@ export default function AdminPage() {
                               }}
                             >
                               Update Triggers
+                            </button>
+                            <button 
+                              className="glass-button secondary" 
+                              style={{ 
+                                padding: '6px 12px', 
+                                fontSize: '12px', 
+                                color: '#ef4444', 
+                                borderColor: 'rgba(239, 68, 68, 0.3)',
+                                background: 'rgba(239, 68, 68, 0.05)'
+                              }}
+                              onClick={() => handleRemoveSocialPost(post.id)}
+                            >
+                              Remove Post
                             </button>
                           </div>
                         </div>

@@ -37,12 +37,20 @@ export async function GET(request: Request) {
   }
 }
 
-// DELETE clear logs
+// DELETE clear logs or remove post triggers
 export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const clearAll = searchParams.get('clearAll') === 'true';
     const logId = searchParams.get('id');
+    const postId = searchParams.get('postId');
+
+    if (postId) {
+      await prisma.socialPost.delete({
+        where: { id: postId }
+      });
+      return NextResponse.json({ success: true, message: 'Social post trigger settings removed' });
+    }
 
     if (clearAll) {
       await prisma.interactionLog.deleteMany();
@@ -56,10 +64,10 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ success: true, message: 'Log entry deleted successfully' });
     }
 
-    return NextResponse.json({ error: 'Specify clearAll=true or log id' }, { status: 400 });
+    return NextResponse.json({ error: 'Specify postId, clearAll=true, or log id' }, { status: 400 });
   } catch (error: any) {
-    console.error('Failed to clear logs:', error);
-    return NextResponse.json({ error: error.message || 'Failed to clear logs' }, { status: 500 });
+    console.error('Failed to clear logs / delete post:', error);
+    return NextResponse.json({ error: error.message || 'Failed to delete' }, { status: 500 });
   }
 }
 

@@ -356,7 +356,7 @@ export async function POST(request: Request) {
         platform: mappedPlatforms.map(p => p.name).join(', '),
         generatedContent: mappedPlatforms.map(p => `${p.name}: ${p.content}`).join('\n\n'),
         status: 'SENT',
-        ayrshareRefId: responseData.id || responseData.postId || '',
+        ayrshareRefId: responseData.id || responseData.postId || responseData.post?._id || responseData.post?.id || '',
         triggerWords: triggerWords || 'link,store,recommendations',
       },
     });
