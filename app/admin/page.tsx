@@ -1222,10 +1222,11 @@ export default function AdminPage() {
         if (res.ok) {
           successCount++;
         } else {
-          failedPlatforms.push(item.name);
+          const data = await res.json().catch(() => ({}));
+          failedPlatforms.push(`${item.name}: ${data.error || 'Unknown error'}`);
         }
-      } catch (err) {
-        failedPlatforms.push(item.name);
+      } catch (err: any) {
+        failedPlatforms.push(`${item.name}: ${err.message || 'Unknown error'}`);
       }
     }
 
@@ -1233,7 +1234,7 @@ export default function AdminPage() {
     if (failedPlatforms.length === 0) {
       showMessage(`Successfully posted to all ${successCount} platforms!`);
     } else {
-      showMessage(`Posted to ${successCount} platforms. Failed for: ${failedPlatforms.join(', ')}`, 'error');
+      showMessage(`Posted to ${successCount} platforms. Failed for: ${failedPlatforms.join(' | ')}`, 'error');
     }
   };
 
