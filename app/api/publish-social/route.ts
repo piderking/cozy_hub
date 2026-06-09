@@ -160,10 +160,20 @@ export async function POST(request: Request) {
     for (const plat of mappedPlatforms) {
       const matchedAccount = accountsList.find((acc: any) => acc.platform === plat && acc.isActive !== false);
       if (matchedAccount) {
-        zernioPlatformsPayload.push({
+        const platformObj: any = {
           platform: plat,
           accountId: matchedAccount._id,
-        });
+        };
+
+        if (plat === 'pinterest' && pinterestOptions) {
+          platformObj.platformSpecificData = {
+            boardId: pinterestOptions.boardId,
+            title: pinterestOptions.title,
+            link: pinterestOptions.link,
+          };
+        }
+
+        zernioPlatformsPayload.push(platformObj);
       } else {
         return NextResponse.json(
           { error: `No active connected account found in Zernio for platform: ${plat}. Please link it in your Zernio dashboard first.` },
