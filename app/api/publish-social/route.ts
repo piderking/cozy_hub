@@ -183,7 +183,7 @@ export async function POST(request: Request) {
 
     // Call Zernio API
     const zernioPayload: any = {
-      text: postDescription,
+      content: postDescription,
       platforms: zernioPlatformsPayload
     };
 
