@@ -190,11 +190,12 @@ export async function POST(request: Request) {
     let commentReplySuccess = false;
     let errorMessage = '';
 
-    // 1. Send Instagram DM (if Instagram and recipientId is present)
-    if (isInstagram && recipientId) {
-      console.log(`Sending Instagram DM to user: ${recipientId} (${username}) via Zernio`);
+    // 1. Send Instagram DM (if Instagram)
+    if (isInstagram && commentId) {
+      const privateReplyUrl = `https://zernio.com/api/v1/inbox/comments/${replyPostId}/${commentId}/private-reply`;
+      console.log(`Sending Instagram private reply DM via Zernio: ${privateReplyUrl}`);
       try {
-        const dmRes = await fetch('https://zernio.com/api/v1/inbox/messages', {
+        const dmRes = await fetch(privateReplyUrl, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${zernio_api_key}`,
@@ -202,7 +203,6 @@ export async function POST(request: Request) {
           },
           body: JSON.stringify({
             accountId,
-            recipientId,
             message: dmText
           })
         });
