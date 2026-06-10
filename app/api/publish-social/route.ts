@@ -394,7 +394,15 @@ export async function POST(request: Request) {
     const commentRegex = /comment\s+['"“‘]?([a-zA-Z0-9_-]{2,15})['"”’]?/gi;
     const dmRegex = /dm\s+['"“‘]?([a-zA-Z0-9_-]{2,15})['"”’]?/gi;
     
-    const allTextToParse = mappedPlatforms.map(p => p.content).join('\n') + '\n' + (postContent || '');
+    let allTextToParse = mappedPlatforms.map(p => p.content).join('\n') + '\n' + (postContent || '');
+    mappedPlatforms.forEach(p => {
+      if (p.instagramFirstComment) {
+        allTextToParse += '\n' + p.instagramFirstComment;
+      }
+    });
+    if (instagramFirstComment) {
+      allTextToParse += '\n' + instagramFirstComment;
+    }
     let match;
     while ((match = commentRegex.exec(allTextToParse)) !== null) {
       if (match[1]) triggersList.push(match[1].toLowerCase());
