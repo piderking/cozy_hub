@@ -52,6 +52,20 @@ export async function POST(request: Request) {
     // Fetch settings to check bot username
     const settings = await getSettings();
 
+    // Deduplicate: check if this comment has already been responded to
+    if (commentId) {
+      const existingLog = await prisma.interactionLog.findFirst({
+        where: { 
+          commentId, 
+          status: { in: ['SENT', 'SENT (SIMULATED)'] } 
+        }
+      });
+      if (existingLog) {
+        console.log(`Already responded to comment ID: ${commentId}. Ignoring duplicate webhook.`);
+        return NextResponse.json({ success: true, message: 'Already responded to this comment' });
+      }
+    }
+
     // Prevent loop: do not respond to comments made by the bot itself
     const botUsername = (settings.bot_username || '_cozy_hub').trim().toLowerCase().replace(/^@/, '');
     const senderUsername = username.trim().toLowerCase().replace(/^@/, '');
@@ -124,6 +138,7 @@ export async function POST(request: Request) {
           status: 'NO_TRIGGER_MATCH',
           responseSent: 'N/A - No trigger word matched',
           platform,
+          commentId,
           socialPostId: socialPost.id,
         }
       });
@@ -163,6 +178,7 @@ export async function POST(request: Request) {
           status: 'SENT (SIMULATED)',
           responseSent: simulatedResponseSent,
           platform,
+          commentId,
           socialPostId: socialPost.id,
         }
       });
@@ -188,6 +204,7 @@ export async function POST(request: Request) {
           status: 'FAILED (API key not configured)',
           responseSent: isInstagram ? `DM: "${dmText}" | Comment Reply: "${commentReplyText}"` : commentReplyText,
           platform,
+          commentId,
           socialPostId: socialPost.id,
         }
       });
@@ -276,6 +293,7 @@ export async function POST(request: Request) {
         status: logStatus,
         responseSent: logResponseSent,
         platform,
+        commentId,
         socialPostId: socialPost.id,
       }
     });

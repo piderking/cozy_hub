@@ -63,6 +63,7 @@ model InteractionLog {
   status           String    // "SENT", "FAILED", "NO_TRIGGER_MATCH", "SENT (SIMULATED)"
   responseSent     String    // The message/link sent back
   platform         String    // "instagram"
+  commentId        String?
   socialPostId     String?
   socialPost       SocialPost? @relation(fields: [socialPostId], references: [id], onDelete: SetNull)
   createdAt        DateTime  @default(now())

@@ -102,6 +102,15 @@ Return the outputs strictly in JSON format with these exact keys:
         parsedData.pinterestTitle = parsedData.customTitle || title || '';
       }
 
+      // Copy Instagram CTA first comment to description if both exist
+      if (parsedData.instagramPost && parsedData.instagramFirstComment) {
+        const cta = parsedData.instagramFirstComment.trim();
+        const postText = parsedData.instagramPost.trim();
+        if (cta && !postText.toLowerCase().includes(cta.toLowerCase())) {
+          parsedData.instagramPost = postText + '\n\n' + cta;
+        }
+      }
+
       const keys = ['instagramPost', 'pinterestPost'] as const;
       keys.forEach(key => {
         if (parsedData[key] && typeof parsedData[key] === 'string') {
