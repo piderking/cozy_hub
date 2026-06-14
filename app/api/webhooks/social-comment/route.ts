@@ -53,15 +53,19 @@ export async function POST(request: Request) {
     const settings = await getSettings();
 
     // Deduplicate: check if this comment has already been responded to
+    let alreadySentDM = false;
+    let alreadySentCommentReply = false;
+
     if (commentId) {
-      const existingLog = await prisma.interactionLog.findFirst({
-        where: { 
-          commentId, 
-          status: { in: ['SENT', 'SENT (SIMULATED)'] } 
-        }
+      const priorLogs = await prisma.interactionLog.findMany({
+        where: { commentId }
       });
-      if (existingLog) {
-        console.log(`Already responded to comment ID: ${commentId}. Ignoring duplicate webhook.`);
+      
+      alreadySentDM = priorLogs.some(l => l.dmSent || l.status === 'SENT' || l.status === 'SENT (SIMULATED)');
+      alreadySentCommentReply = priorLogs.some(l => l.commentReplySent || l.status === 'SENT' || l.status === 'SENT (SIMULATED)');
+
+      if (alreadySentDM && alreadySentCommentReply) {
+        console.log(`Already fully responded to comment ID: ${commentId} (DM and Comment reply sent). Ignoring duplicate webhook.`);
         return NextResponse.json({ success: true, message: 'Already responded to this comment' });
       }
     }
@@ -139,6 +143,8 @@ export async function POST(request: Request) {
           responseSent: 'N/A - No trigger word matched',
           platform,
           commentId,
+          dmSent: false,
+          commentReplySent: false,
           socialPostId: socialPost.id,
         }
       });
@@ -179,6 +185,8 @@ export async function POST(request: Request) {
           responseSent: simulatedResponseSent,
           platform,
           commentId,
+          dmSent: isInstagram,
+          commentReplySent: true,
           socialPostId: socialPost.id,
         }
       });
@@ -205,6 +213,8 @@ export async function POST(request: Request) {
           responseSent: isInstagram ? `DM: "${dmText}" | Comment Reply: "${commentReplyText}"` : commentReplyText,
           platform,
           commentId,
+          dmSent: false,
+          commentReplySent: false,
           socialPostId: socialPost.id,
         }
       });
@@ -220,10 +230,46 @@ export async function POST(request: Request) {
 
     // 1. Send Instagram DM (if Instagram)
     if (isInstagram && commentId) {
-      const privateReplyUrl = `https://zernio.com/api/v1/inbox/comments/${replyPostId}/${commentId}/private-reply`;
-      console.log(`Sending Instagram private reply DM via Zernio: ${privateReplyUrl}`);
+      if (alreadySentDM) {
+        console.log(`DM already sent successfully for comment ID: ${commentId}. Skipping.`);
+        dmSuccess = true;
+      } else {
+        const privateReplyUrl = `https://zernio.com/api/v1/inbox/comments/${replyPostId}/${commentId}/private-reply`;
+        console.log(`Sending Instagram private reply DM via Zernio: ${privateReplyUrl}`);
+        try {
+          const dmRes = await fetch(privateReplyUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${zernio_api_key}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              accountId,
+              message: dmText
+            })
+          });
+          const dmData = await dmRes.json();
+          if (dmRes.ok && dmData.success !== false) {
+            dmSuccess = true;
+          } else {
+            console.error('Zernio DM reply failed:', dmData);
+            errorMessage += `DM failed: ${dmData.message || 'Unknown error'}. `;
+          }
+        } catch (err: any) {
+          console.error('Error sending Zernio DM:', err);
+          errorMessage += `DM error: ${err.message}. `;
+        }
+      }
+    }
+
+    // 2. Reply to the comment publicly
+    if (alreadySentCommentReply) {
+      console.log(`Comment reply already sent successfully for comment ID: ${commentId}. Skipping.`);
+      commentReplySuccess = true;
+    } else {
+      console.log(`Sending auto-reply comment via Zernio for comment: ${commentId} on post: ${replyPostId}`);
       try {
-        const dmRes = await fetch(privateReplyUrl, {
+        const commentRes = await fetch(replyUrl, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${zernio_api_key}`,
@@ -231,47 +277,21 @@ export async function POST(request: Request) {
           },
           body: JSON.stringify({
             accountId,
-            message: dmText
+            commentId,
+            message: commentReplyText
           })
         });
-        const dmData = await dmRes.json();
-        if (dmRes.ok && dmData.success !== false) {
-          dmSuccess = true;
+        const commentData = await commentRes.json();
+        if (commentRes.ok && commentData.success !== false && commentData.status !== 'error') {
+          commentReplySuccess = true;
         } else {
-          console.error('Zernio DM reply failed:', dmData);
-          errorMessage += `DM failed: ${dmData.message || 'Unknown error'}. `;
+          console.error('Zernio comment reply failed:', commentData);
+          errorMessage += `Comment reply failed: ${commentData.message || 'Unknown error'}. `;
         }
       } catch (err: any) {
-        console.error('Error sending Zernio DM:', err);
-        errorMessage += `DM error: ${err.message}. `;
+        console.error('Error sending Zernio comment reply:', err);
+        errorMessage += `Comment reply error: ${err.message}. `;
       }
-    }
-
-    // 2. Reply to the comment publicly
-    console.log(`Sending auto-reply comment via Zernio for comment: ${commentId} on post: ${replyPostId}`);
-    try {
-      const commentRes = await fetch(replyUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${zernio_api_key}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          accountId,
-          commentId,
-          message: commentReplyText
-        })
-      });
-      const commentData = await commentRes.json();
-      if (commentRes.ok && commentData.success !== false && commentData.status !== 'error') {
-        commentReplySuccess = true;
-      } else {
-        console.error('Zernio comment reply failed:', commentData);
-        errorMessage += `Comment reply failed: ${commentData.message || 'Unknown error'}. `;
-      }
-    } catch (err: any) {
-      console.error('Error sending Zernio comment reply:', err);
-      errorMessage += `Comment reply error: ${err.message}. `;
     }
 
     // Determine overall status
@@ -294,6 +314,8 @@ export async function POST(request: Request) {
         responseSent: logResponseSent,
         platform,
         commentId,
+        dmSent: dmSuccess,
+        commentReplySent: commentReplySuccess,
         socialPostId: socialPost.id,
       }
     });

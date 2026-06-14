@@ -64,6 +64,8 @@ model InteractionLog {
   responseSent     String    // The message/link sent back
   platform         String    // "instagram"
   commentId        String?
+  dmSent           Boolean   @default(false)
+  commentReplySent Boolean   @default(false)
   socialPostId     String?
   socialPost       SocialPost? @relation(fields: [socialPostId], references: [id], onDelete: SetNull)
   createdAt        DateTime  @default(now())
