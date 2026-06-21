@@ -119,11 +119,12 @@ export async function GET(request: Request) {
     }
 
     const settings = await getSettings();
-    const apiKey = settings.rainforest_api_key;
+    const apiKey = settings.rapidapi_key;
+    const apiHost = settings.rapidapi_host || 'real-time-amazon-data.p.rapidapi.com';
 
     // 1. SIMULATION MODE (No API Key set, or set to mock values)
-    if (!apiKey || apiKey === 'your_rainforest_api_key' || apiKey.trim() === '') {
-      console.log(`[Amazon Search] Rainforest API Key not set. Running in simulation mode for query: "${query}"`);
+    if (!apiKey || apiKey === 'your_rapidapi_key' || apiKey.trim() === '') {
+      console.log(`[Amazon Search] RapidAPI Key not set. Running in simulation mode for query: "${query}"`);
       
       const lowerQuery = query.toLowerCase();
       
@@ -153,31 +154,63 @@ export async function GET(request: Request) {
       });
     }
 
-    // 2. REAL RAINFOREST API MODE
-    console.log(`[Amazon Search] Calling Rainforest API for query: "${query}"`);
-    const rainforestUrl = `https://api.rainforestapi.com/request?api_key=${encodeURIComponent(apiKey)}&type=search&amazon_domain=amazon.com&search_term=${encodeURIComponent(query)}`;
+    // 2. REAL RAPIDAPI MODE
+    console.log(`[Amazon Search] Calling RapidAPI (${apiHost}) for query: "${query}"`);
+    
+    // Construct the search URL for Real-Time Amazon Data API on RapidAPI
+    const url = `https://${apiHost}/search?query=${encodeURIComponent(query)}&page=1&country=US&sort_by=RELEVANCE&product_condition=ALL`;
 
-    const response = await fetch(rainforestUrl);
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'x-rapidapi-key': apiKey,
+        'x-rapidapi-host': apiHost
+      }
+    });
     
     if (!response.ok) {
-      throw new Error(`Rainforest API responded with status ${response.status}`);
+      throw new Error(`RapidAPI responded with status ${response.status}`);
     }
 
     const data = await response.json();
 
-    if (data.request_info && data.request_info.success === false) {
-      throw new Error(data.request_info.message || 'Rainforest API request failed');
+    if (data.status !== 'OK' && !data.data) {
+      throw new Error(data.message || 'RapidAPI request failed or returned invalid status');
     }
 
-    const results = (data.search_results || []).map((item: any) => ({
-      title: item.title || '',
-      asin: item.asin || '',
-      image: item.image || '',
-      price: item.price?.value ? `$${item.price.value}` : (item.price?.raw || ''),
-      stars: item.rating || 4.5,
-      reviewsCount: item.ratings_total ? item.ratings_total.toLocaleString('en-US') : '0',
-      url: item.link || `https://www.amazon.com/dp/${item.asin}`
-    }));
+    const productsList = data.data?.products || [];
+
+    const results = productsList.map((item: any) => {
+      // Parse star rating safely
+      let parsedStars = 4.5;
+      if (item.product_star_rating !== undefined && item.product_star_rating !== null) {
+        const parsed = parseFloat(item.product_star_rating);
+        if (!isNaN(parsed)) {
+          parsedStars = parsed;
+        }
+      }
+
+      // Parse ratings count safely
+      let formattedReviews = '0';
+      if (item.product_num_ratings !== undefined && item.product_num_ratings !== null) {
+        const num = parseInt(item.product_num_ratings, 10);
+        if (!isNaN(num)) {
+          formattedReviews = num.toLocaleString('en-US');
+        } else {
+          formattedReviews = String(item.product_num_ratings);
+        }
+      }
+
+      return {
+        title: item.product_title || '',
+        asin: item.asin || '',
+        image: item.product_photo || '',
+        price: item.product_price || '',
+        stars: parsedStars,
+        reviewsCount: formattedReviews,
+        url: item.product_url || `https://www.amazon.com/dp/${item.asin}`
+      };
+    });
 
     return NextResponse.json({
       success: true,

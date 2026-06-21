@@ -29,7 +29,10 @@ import {
   Palette,
   Sliders,
   User,
-  Terminal
+  Terminal,
+  Search,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import styles from './admin.module.css';
 
@@ -194,7 +197,7 @@ CRITICAL INSTRUCTIONS:
 };
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<'listings' | 'curator' | 'settings' | 'collections' | 'influencer' | 'responder'>('listings');
+  const [activeTab, setActiveTab] = useState<'listings' | 'curator' | 'settings' | 'collections' | 'influencer' | 'responder' | 'finder'>('listings');
   
   // New States for AI Collections
   const [collections, setCollections] = useState<any[]>([]);
@@ -287,6 +290,30 @@ export default function AdminPage() {
   const [pastedHtml, setPastedHtml] = useState('');
   const [imageUrlInput, setImageUrlInput] = useState('');
   const [imageInstructions, setImageInstructions] = useState('');
+
+  // Amazon Product Search State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+
+  // Amazon Finder Auto-Crawler States
+  const [finderActive, setFinderActive] = useState(false);
+  const [finderInterval, setFinderInterval] = useState(5); // interval in minutes
+  const [finderLimit, setFinderLimit] = useState(5); // limit per search
+  const [finderNiches, setFinderNiches] = useState('lamp, desk organizer, throw blanket, coffee mug, monitor stand, fairy lights');
+  const [finderStatus, setFinderStatus] = useState('Idle');
+  const [finderCountdown, setFinderCountdown] = useState(300); // countdown in seconds
+  const [finderLogs, setFinderLogs] = useState<{ time: string; text: string }[]>([]);
+  const [finderResults, setFinderResults] = useState<any[]>([]);
+  const [nicheIndex, setNicheIndex] = useState(0);
+
+  // AI Semantic Manual Search States
+  const [aiSearchInput, setAiSearchInput] = useState('');
+  const [aiSearchExplanation, setAiSearchExplanation] = useState('');
+  const [aiSearchResultsList, setAiSearchResultsList] = useState<any[]>([]);
+  const [aiSearchRunning, setAiSearchRunning] = useState(false);
   const [curatedProduct, setCuratedProduct] = useState({
     id: '', // Empty if new
     title: '',
@@ -941,6 +968,151 @@ export default function AdminPage() {
       [key]: DEFAULT_PROMPTS[key] || ''
     }));
     showMessage('Reset prompt template to default value. Click "Save Configurations" to persist.');
+  };
+
+  // Amazon product search handler
+  const handleAmazonSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+
+    setSearchLoading(true);
+    setSearchError('');
+    try {
+      const res = await fetch(`/api/search-amazon?q=${encodeURIComponent(searchQuery)}`);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to search products');
+      }
+      setSearchResults(data.results || []);
+    } catch (err: any) {
+      console.error(err);
+      setSearchError(err.message || 'An error occurred while searching');
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleImportProduct = (prod: any) => {
+    setAmazonUrl(prod.url);
+    setCuratedProduct(prev => ({
+      ...prev,
+      title: prod.title,
+      originalUrl: prod.url,
+      affiliateUrl: prod.url,
+      mainImage: prod.image,
+      originalProductImage: prod.image,
+      stars: parseFloat(prod.stars) || 4.5,
+      reviewsCount: String(prod.reviewsCount) || '0',
+    }));
+    setImageUrlInput(prod.image);
+    setActiveTab('curator');
+    showMessage(`Successfully imported "${prod.title.substring(0, 30)}..."! Review details below.`, 'success');
+  };
+
+  const addFinderLog = (text: string) => {
+    const time = new Date().toLocaleTimeString();
+    setFinderLogs(prev => [{ time, text }, ...prev.slice(0, 49)]);
+  };
+
+  const runAutoSearch = async () => {
+    const nicheList = finderNiches.split(',').map(n => n.trim()).filter(Boolean);
+    if (nicheList.length === 0) {
+      addFinderLog('Error: Niche list is empty. Auto-finder paused.');
+      setFinderActive(false);
+      return;
+    }
+
+    const currentNiche = nicheList[nicheIndex % nicheList.length];
+    setNicheIndex(prev => prev + 1);
+
+    addFinderLog(`Starting automated crawl for keyword: "${currentNiche}"`);
+    setFinderStatus(`Searching for "${currentNiche}"...`);
+
+    try {
+      const res = await fetch(`/api/search-amazon?q=${encodeURIComponent(currentNiche)}`);
+      if (!res.ok) {
+        throw new Error(`Failed to search. Status: ${res.status}`);
+      }
+      const data = await res.json();
+      const newProducts = data.results || [];
+      
+      if (newProducts.length === 0) {
+        addFinderLog(`Crawl completed for "${currentNiche}". No new items found.`);
+      } else {
+        const sliceCount = Math.min(newProducts.length, finderLimit);
+        const productsToImport = newProducts.slice(0, sliceCount);
+        
+        setFinderResults(prev => {
+          const existingAsins = new Set(prev.map((p: any) => p.asin));
+          const filtered = productsToImport.filter((p: any) => !existingAsins.has(p.asin));
+          return [...filtered, ...prev];
+        });
+        
+        addFinderLog(`Crawl completed for "${currentNiche}". Found ${newProducts.length} items. Added ${productsToImport.length} to feed.`);
+      }
+    } catch (err: any) {
+      console.error(err);
+      addFinderLog(`Crawl failed for "${currentNiche}": ${err.message || 'Unknown error'}`);
+    }
+
+    setFinderCountdown(finderInterval * 60);
+  };
+
+  // Automated Finder Crawler Timer Effect
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (finderActive) {
+      if (finderCountdown <= 0) {
+        runAutoSearch();
+      } else {
+        timer = setTimeout(() => {
+          setFinderCountdown(prev => prev - 1);
+        }, 1000);
+      }
+    } else {
+      setFinderStatus('Paused');
+    }
+    return () => clearTimeout(timer);
+  }, [finderActive, finderCountdown]);
+
+  // Update status message on countdown tick
+  useEffect(() => {
+    if (finderActive) {
+      const minutes = Math.floor(finderCountdown / 60);
+      const seconds = finderCountdown % 60;
+      setFinderStatus(`Next search in ${minutes}:${seconds < 10 ? '0' : ''}${seconds}`);
+    }
+  }, [finderCountdown, finderActive]);
+
+  useEffect(() => {
+    setFinderCountdown(finderInterval * 60);
+  }, [finderInterval]);
+
+  const handleAiSemanticSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!aiSearchInput.trim()) return;
+
+    setAiSearchRunning(true);
+    setAiSearchExplanation('');
+    try {
+      const res = await fetch('/api/search-amazon/semantic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instruction: aiSearchInput })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to perform AI search');
+      }
+      setAiSearchResultsList(data.results || []);
+      setAiSearchExplanation(data.explanation || '');
+      showMessage(`AI processed search successfully! Found ${data.results?.length || 0} items.`, 'success');
+    } catch (err: any) {
+      console.error(err);
+      showMessage(err.message || 'Failed to complete AI semantic search', 'error');
+    } finally {
+      setAiSearchRunning(false);
+    }
   };
 
   // Parsing amazon product page content using Gemini
@@ -1624,6 +1796,10 @@ export default function AdminPage() {
       title: 'Auto-Responder Logs',
       subtext: 'Track real-time Instagram webhook requests, DM dispatches, and public replies'
     },
+    finder: {
+      title: 'Amazon Product Finder',
+      subtext: 'Automate product discovery and query products with AI-powered instructions'
+    },
     settings: {
       title: 'Hub Settings',
       subtext: 'Configure your brand style, affiliate partner tags, and external API keys'
@@ -1670,6 +1846,12 @@ export default function AdminPage() {
             onClick={() => setActiveTab('responder')}
           >
             <MessageSquare size={16} /> Auto-Responder Logs
+          </button>
+          <button 
+            className={`${styles.tabBtn} ${activeTab === 'finder' ? styles.activeTabBtn : ''}`}
+            onClick={() => setActiveTab('finder')}
+          >
+            <Search size={16} /> Amazon Finder
           </button>
           <button 
             className={`${styles.tabBtn} ${activeTab === 'settings' ? styles.activeTabBtn : ''}`}
@@ -1843,8 +2025,157 @@ export default function AdminPage() {
               </h2>
               
               {!curatedProduct.id && (
-                <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '20px', marginBottom: '20px' }}>
-                  <div className={styles.formGroup}>
+                <>
+                  {/* Find Products on Amazon Drawer */}
+                  <div style={{ 
+                    borderBottom: '1px solid var(--border-color)', 
+                    paddingBottom: '16px', 
+                    marginBottom: '16px',
+                    background: 'rgba(217, 119, 6, 0.03)',
+                    border: '1px solid rgba(217, 119, 6, 0.1)',
+                    borderRadius: '12px',
+                    padding: '16px',
+                  }}>
+                    <div 
+                      onClick={() => setShowSearch(!showSearch)} 
+                      style={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center', 
+                        cursor: 'pointer',
+                        userSelect: 'none'
+                      }}
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '600', color: 'var(--primary-color)' }}>
+                        <Search size={16} />
+                        Find Products on Amazon
+                      </span>
+                      {showSearch ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </div>
+
+                    {showSearch && (
+                      <div style={{ marginTop: '16px' }} className="animated-fade-in">
+                        <form onSubmit={handleAmazonSearch} style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                          <input 
+                            type="text" 
+                            placeholder="Search for cozy items (e.g. lamp, desk organizer)..." 
+                            className="glass-input"
+                            style={{ flex: 1 }}
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                          />
+                          <button 
+                            type="submit" 
+                            className="glass-button" 
+                            disabled={searchLoading}
+                            style={{ minWidth: '80px' }}
+                          >
+                            {searchLoading ? <Loader2 className="spinner" size={14} /> : 'Search'}
+                          </button>
+                        </form>
+
+                        {searchError && (
+                          <div style={{ color: '#ef4444', fontSize: '13px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <AlertCircle size={14} /> {searchError}
+                          </div>
+                        )}
+
+                        {searchResults.length > 0 ? (
+                          <div style={{ 
+                            display: 'grid', 
+                            gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', 
+                            gap: '12px', 
+                            maxHeight: '300px', 
+                            overflowY: 'auto',
+                            paddingRight: '4px',
+                            marginTop: '8px'
+                          }}>
+                            {searchResults.map((prod, idx) => (
+                              <div 
+                                key={idx} 
+                                style={{ 
+                                  background: 'rgba(255, 255, 255, 0.03)', 
+                                  border: '1px solid var(--border-color)', 
+                                  borderRadius: '8px', 
+                                  padding: '8px',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  justifyContent: 'space-between',
+                                  gap: '8px',
+                                  position: 'relative'
+                                }}
+                              >
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                  {prod.image && (
+                                    <div style={{ 
+                                      width: '100%', 
+                                      height: '80px', 
+                                      borderRadius: '6px', 
+                                      overflow: 'hidden', 
+                                      background: 'rgba(0,0,0,0.2)',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center'
+                                    }}>
+                                      <img 
+                                        src={prod.image} 
+                                        alt={prod.title} 
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                      />
+                                    </div>
+                                  )}
+                                  <div style={{ 
+                                    fontSize: '11px', 
+                                    fontWeight: '500', 
+                                    lineHeight: '1.2', 
+                                    height: '2.4em', 
+                                    overflow: 'hidden', 
+                                    textOverflow: 'ellipsis',
+                                    display: '-webkit-box',
+                                    WebkitLineClamp: 2,
+                                    WebkitBoxOrient: 'vertical'
+                                  }}>
+                                    {prod.title}
+                                  </div>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '10px' }}>
+                                    <span style={{ color: 'var(--primary-color)', fontWeight: 'bold' }}>{prod.price || 'N/A'}</span>
+                                    <span style={{ color: '#fbbf24' }}>★ {prod.stars}</span>
+                                  </div>
+                                </div>
+                                <div style={{ display: 'flex', gap: '4px' }}>
+                                  <button 
+                                    onClick={() => handleImportProduct(prod)}
+                                    className="glass-button"
+                                    style={{ padding: '4px 6px', fontSize: '10px', flex: 1, height: '24px', justifyContent: 'center' }}
+                                  >
+                                    Import
+                                  </button>
+                                  <a 
+                                    href={prod.url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="glass-button"
+                                    style={{ padding: '4px', width: '24px', height: '24px', justifyContent: 'center', flexShrink: 0 }}
+                                  >
+                                    <ExternalLink size={10} />
+                                  </a>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          !searchLoading && searchQuery && (
+                            <div style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', padding: '16px 0' }}>
+                              No products found matching your search.
+                            </div>
+                          )
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '20px', marginBottom: '20px' }}>
+                    <div className={styles.formGroup}>
                     <label>Amazon URL</label>
                     <input 
                       type="text" 
@@ -1883,6 +2214,7 @@ export default function AdminPage() {
                     )}
                   </button>
                 </div>
+                </>
               )}
 
               {/* Parsed / Reviewed details */}
@@ -2374,6 +2706,383 @@ export default function AdminPage() {
               </div>
             </div>
 
+          </div>
+        )}
+
+        {/* Amazon Finder Tab */}
+        {activeTab === 'finder' && (
+          <div className="animated-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            
+            {/* Top Grid: Automated Finder & AI Semantic Search */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+              
+              {/* Card 1: Automated Finder Controller */}
+              <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary-color)', fontSize: '15px' }}>
+                    <RefreshCw className={finderActive ? "spinner" : ""} size={18} />
+                    Automated Product Finder
+                  </h3>
+                  <span style={{ 
+                    fontSize: '11px', 
+                    padding: '3px 8px', 
+                    borderRadius: '20px', 
+                    fontWeight: '600',
+                    background: finderActive ? 'rgba(16, 185, 129, 0.1)' : 'rgba(255, 255, 255, 0.05)',
+                    color: finderActive ? '#10b981' : 'var(--text-muted)'
+                  }}>
+                    {finderStatus}
+                  </span>
+                </div>
+
+                <p className="text-muted" style={{ fontSize: '12px', margin: 0 }}>
+                  Automatically discovers Amazon products on a schedule and populates them in the discovered feed below.
+                </p>
+
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <div className={styles.formGroup} style={{ flex: 1 }}>
+                    <label style={{ fontSize: '11px' }}>Search Interval (minutes)</label>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      className="glass-input" 
+                      value={finderInterval} 
+                      onChange={(e) => setFinderInterval(Math.max(1, parseInt(e.target.value) || 1))}
+                    />
+                  </div>
+                  <div className={styles.formGroup} style={{ flex: 1 }}>
+                    <label style={{ fontSize: '11px' }}>Limit per Search</label>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      max="10"
+                      className="glass-input" 
+                      value={finderLimit} 
+                      onChange={(e) => setFinderLimit(Math.max(1, parseInt(e.target.value) || 1))}
+                    />
+                  </div>
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label style={{ fontSize: '11px' }}>Rotated Niches / Keywords (comma-separated)</label>
+                  <textarea 
+                    className="glass-input" 
+                    style={{ minHeight: '60px', fontSize: '12px', resize: 'vertical' }}
+                    value={finderNiches} 
+                    onChange={(e) => setFinderNiches(e.target.value)} 
+                    placeholder="e.g. lamp, wood organizer, throw blanket"
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px', marginTop: '4px' }}>
+                  <button 
+                    onClick={() => {
+                      if (!finderActive) {
+                        addFinderLog('Auto-finder activated.');
+                        runAutoSearch();
+                        setFinderActive(true);
+                      } else {
+                        addFinderLog('Auto-finder paused.');
+                        setFinderActive(false);
+                      }
+                    }} 
+                    className="glass-button"
+                    style={{ 
+                      flex: 1, 
+                      background: finderActive ? 'rgba(239, 68, 68, 0.1)' : 'rgba(217, 119, 6, 0.15)',
+                      borderColor: finderActive ? 'rgba(239, 68, 68, 0.3)' : 'var(--primary-color)',
+                      color: finderActive ? '#ef4444' : 'var(--primary-color)',
+                      fontWeight: '600'
+                    }}
+                  >
+                    {finderActive ? 'Pause Auto-Finder' : 'Start Auto-Finder'}
+                  </button>
+                  <button 
+                    onClick={() => {
+                      runAutoSearch();
+                    }}
+                    className="glass-button"
+                    disabled={finderActive && finderStatus.includes('Searching')}
+                    style={{ padding: '0 16px' }}
+                  >
+                    Run Now
+                  </button>
+                </div>
+
+                {/* Event Logs Console */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: '600', opacity: 0.8 }}>Finder Operations Console Log</span>
+                  <div style={{ 
+                    background: 'rgba(0,0,0,0.4)', 
+                    border: '1px solid var(--border-color)', 
+                    borderRadius: '8px', 
+                    padding: '8px 12px', 
+                    height: '100px', 
+                    overflowY: 'auto',
+                    fontFamily: 'monospace',
+                    fontSize: '10px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                    color: '#10b981'
+                  }}>
+                    {finderLogs.length === 0 ? (
+                      <span style={{ color: 'var(--text-muted)' }}>Console idle. Awaiting triggers...</span>
+                    ) : (
+                      finderLogs.map((log, idx) => (
+                        <div key={idx} style={{ display: 'flex', gap: '8px' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>[{log.time}]</span>
+                          <span>{log.text}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 2: AI Semantic Search */}
+              <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary-color)', fontSize: '15px' }}>
+                  <Sparkles size={18} />
+                  AI Semantic Finder
+                </h3>
+
+                <p className="text-muted" style={{ fontSize: '12px', margin: 0 }}>
+                  Describe the style or specific vibe of the products you want to find. Gemini will analyze your instruction, target optimized listings, and query Amazon.
+                </p>
+
+                <form onSubmit={handleAiSemanticSearch} style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
+                  <div className={styles.formGroup} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                    <label style={{ fontSize: '11px' }}>Search Instruction / Vibe Description</label>
+                    <textarea 
+                      placeholder="e.g. Find me some top rated minimalist warm-glow wood lamps under $50..." 
+                      className="glass-input"
+                      style={{ flex: 1, minHeight: '80px', fontSize: '12px', resize: 'vertical' }}
+                      value={aiSearchInput}
+                      onChange={(e) => setAiSearchInput(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <button 
+                    type="submit" 
+                    className="glass-button" 
+                    disabled={aiSearchRunning}
+                    style={{ width: '100%', fontWeight: '600' }}
+                  >
+                    {aiSearchRunning ? (
+                      <>
+                        <Loader2 className="spinner" size={14} /> AI Processing & Searching...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={14} /> Run AI Search
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                {aiSearchExplanation && (
+                  <div style={{ 
+                    background: 'rgba(217, 119, 6, 0.05)', 
+                    border: '1px solid rgba(217, 119, 6, 0.2)', 
+                    borderRadius: '8px', 
+                    padding: '10px 14px', 
+                    fontSize: '11px',
+                    lineHeight: '1.4'
+                  }}>
+                    <strong style={{ color: 'var(--primary-color)' }}>Gemini Focus:</strong> {aiSearchExplanation}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* AI Semantic Search Results Grid */}
+            {aiSearchResultsList.length > 0 && (
+              <div className="glass-panel" style={{ padding: '20px' }}>
+                <h3 style={{ margin: '0 0 16px 0', fontSize: '15px', color: 'var(--primary-color)' }}>
+                  AI Search Results Feed
+                </h3>
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', 
+                  gap: '16px' 
+                }}>
+                  {aiSearchResultsList.map((prod, idx) => (
+                    <div 
+                      key={idx} 
+                      style={{ 
+                        background: 'rgba(255, 255, 255, 0.02)', 
+                        border: '1px solid var(--border-color)', 
+                        borderRadius: '12px', 
+                        padding: '12px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        gap: '12px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {prod.image && (
+                          <div style={{ 
+                            width: '100%', 
+                            height: '110px', 
+                            borderRadius: '8px', 
+                            overflow: 'hidden', 
+                            background: 'rgba(0,0,0,0.2)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}>
+                            <img 
+                              src={prod.image} 
+                              alt={prod.title} 
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                            />
+                          </div>
+                        )}
+                        <div style={{ 
+                          fontSize: '12px', 
+                          fontWeight: '600', 
+                          lineHeight: '1.3', 
+                          height: '2.6em', 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical'
+                        }}>
+                          {prod.title}
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px' }}>
+                          <span style={{ color: 'var(--primary-color)', fontWeight: 'bold' }}>{prod.price || 'N/A'}</span>
+                          <span style={{ color: '#fbbf24' }}>★ {prod.stars} ({prod.reviewsCount})</span>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button 
+                          onClick={() => handleImportProduct(prod)}
+                          className="glass-button"
+                          style={{ padding: '6px', fontSize: '11px', flex: 1, height: '30px', justifyContent: 'center' }}
+                        >
+                          Import to Curator
+                        </button>
+                        <a 
+                          href={prod.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="glass-button"
+                          style={{ padding: '6px', width: '30px', height: '30px', justifyContent: 'center', flexShrink: 0 }}
+                        >
+                          <ExternalLink size={12} />
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Bottom Section: Discovered Feed */}
+            <div className="glass-panel" style={{ padding: '20px' }}>
+              <h3 style={{ margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '15px' }}>
+                <FolderSearch size={18} />
+                Discovered Products Feed ({finderResults.length})
+              </h3>
+              
+              {finderResults.length === 0 ? (
+                <div style={{ 
+                  textAlign: 'center', 
+                  padding: '40px', 
+                  color: 'var(--text-muted)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <Search size={24} style={{ opacity: 0.5 }} />
+                  <span>No products discovered yet. Configure the auto-crawler above or run a manual search.</span>
+                </div>
+              ) : (
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', 
+                  gap: '16px' 
+                }}>
+                  {finderResults.map((prod, idx) => (
+                    <div 
+                      key={idx} 
+                      style={{ 
+                        background: 'rgba(255, 255, 255, 0.02)', 
+                        border: '1px solid var(--border-color)', 
+                        borderRadius: '12px', 
+                        padding: '12px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        gap: '12px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {prod.image && (
+                          <div style={{ 
+                            width: '100%', 
+                            height: '120px', 
+                            borderRadius: '8px', 
+                            overflow: 'hidden', 
+                            background: 'rgba(0,0,0,0.2)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}>
+                            <img 
+                              src={prod.image} 
+                              alt={prod.title} 
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                            />
+                          </div>
+                        )}
+                        <div style={{ 
+                          fontSize: '12px', 
+                          fontWeight: '600', 
+                          lineHeight: '1.3', 
+                          height: '2.6em', 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical'
+                        }}>
+                          {prod.title}
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px' }}>
+                          <span style={{ color: 'var(--primary-color)', fontWeight: 'bold' }}>{prod.price || 'N/A'}</span>
+                          <span style={{ color: '#fbbf24' }}>★ {prod.stars} ({prod.reviewsCount})</span>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button 
+                          onClick={() => handleImportProduct(prod)}
+                          className="glass-button"
+                          style={{ padding: '6px', fontSize: '11px', flex: 1, height: '30px', justifyContent: 'center' }}
+                        >
+                          Import to Curator
+                        </button>
+                        <a 
+                          href={prod.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="glass-button"
+                          style={{ padding: '6px', width: '30px', height: '30px', justifyContent: 'center', flexShrink: 0 }}
+                        >
+                          <ExternalLink size={12} />
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

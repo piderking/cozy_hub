@@ -33,7 +33,8 @@ export interface HubSettings {
   prompt_influencer: string;
   prompt_scene_prompt: string;
   prompt_mockup_prompt: string;
-  rainforest_api_key: string;
+  rapidapi_key: string;
+  rapidapi_host: string;
 }
 
 export const DEFAULT_SETTINGS: HubSettings = {
@@ -165,7 +166,8 @@ CRITICAL INSTRUCTIONS:
 2. Focus entirely on describing the environment, placement, and lighting where the product should be placed.
 3. The prompt MUST start with the exact phrase: "A photorealistic mockup of the provided product in the reference image. Place it inside a " followed by your environment description.
 4. Output ONLY the raw prompt text. Do not write introductory words or wrap in quotes. Keep it to 1 or 2 concise descriptive sentences.`,
-  rainforest_api_key: '',
+  rapidapi_key: '',
+  rapidapi_host: 'real-time-amazon-data.p.rapidapi.com',
 };
 
 export async function getSettings(): Promise<HubSettings> {
@@ -206,7 +208,8 @@ export async function getSettings(): Promise<HubSettings> {
       prompt_influencer: settingsMap.get('prompt_influencer') ?? DEFAULT_SETTINGS.prompt_influencer,
       prompt_scene_prompt: settingsMap.get('prompt_scene_prompt') ?? DEFAULT_SETTINGS.prompt_scene_prompt,
       prompt_mockup_prompt: settingsMap.get('prompt_mockup_prompt') ?? DEFAULT_SETTINGS.prompt_mockup_prompt,
-      rainforest_api_key: process.env.RAINFOREST_API_KEY || (settingsMap.get('rainforest_api_key') ?? ''),
+      rapidapi_key: process.env.RAPIDAPI_KEY || (settingsMap.get('rapidapi_key') ?? ''),
+      rapidapi_host: process.env.RAPIDAPI_HOST || (settingsMap.get('rapidapi_host') ?? DEFAULT_SETTINGS.rapidapi_host),
     };
   } catch (error) {
     console.error('Error fetching settings from database:', error);
@@ -215,7 +218,8 @@ export async function getSettings(): Promise<HubSettings> {
       gemini_api_key: process.env.GEMINI_API_KEY || '',
       zernio_api_key: process.env.ZERNIO_API_KEY || process.env.UPLOADPOST_API_KEY || process.env.AYRSHARE_API_KEY || '',
       pinterest_board_id: process.env.PINTEREST_BOARD_ID || '',
-      rainforest_api_key: process.env.RAINFOREST_API_KEY || '',
+      rapidapi_key: process.env.RAPIDAPI_KEY || '',
+      rapidapi_host: process.env.RAPIDAPI_HOST || 'real-time-amazon-data.p.rapidapi.com',
     };
   }
 }
