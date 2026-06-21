@@ -308,6 +308,7 @@ export default function AdminPage() {
   const [finderLogs, setFinderLogs] = useState<{ time: string; text: string }[]>([]);
   const [finderResults, setFinderResults] = useState<any[]>([]);
   const [nicheIndex, setNicheIndex] = useState(0);
+  const [autoPublishEnabled, setAutoPublishEnabled] = useState(false);
 
   // AI Semantic Manual Search States
   const [aiSearchInput, setAiSearchInput] = useState('');
@@ -1049,6 +1050,32 @@ export default function AdminPage() {
         });
         
         addFinderLog(`Crawl completed for "${currentNiche}". Found ${newProducts.length} items. Added ${productsToImport.length} to feed.`);
+
+        if (autoPublishEnabled) {
+          addFinderLog(`Auto-Publish enabled. Processing ${productsToImport.length} items sequentially...`);
+          (async () => {
+            for (const prod of productsToImport) {
+              addFinderLog(`[Auto-Publish] Curating: "${prod.title.substring(0, 30)}..."`);
+              try {
+                const publishRes = await fetch('/api/search-amazon/auto-publish', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ product: prod })
+                });
+                const publishData = await publishRes.json();
+                if (publishRes.ok) {
+                  addFinderLog(`[Auto-Publish] Success! Published: "${publishData.product.title.substring(0, 30)}..." 🚀`);
+                  fetchProducts();
+                } else {
+                  addFinderLog(`[Auto-Publish] Failed for "${prod.title.substring(0, 30)}...": ${publishData.error}`);
+                }
+              } catch (err: any) {
+                console.error(err);
+                addFinderLog(`[Auto-Publish] Network error for "${prod.title.substring(0, 30)}...": ${err.message || 'Unknown'}`);
+              }
+            }
+          })();
+        }
       }
     } catch (err: any) {
       console.error(err);
@@ -2772,6 +2799,19 @@ export default function AdminPage() {
                     onChange={(e) => setFinderNiches(e.target.value)} 
                     placeholder="e.g. lamp, wood organizer, throw blanket"
                   />
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', marginBottom: '8px' }}>
+                  <input 
+                    type="checkbox" 
+                    id="autoPublishCheckbox"
+                    checked={autoPublishEnabled} 
+                    onChange={(e) => setAutoPublishEnabled(e.target.checked)}
+                    style={{ accentColor: 'var(--primary-color)', cursor: 'pointer' }}
+                  />
+                  <label htmlFor="autoPublishCheckbox" style={{ fontSize: '12px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    Auto-Publish Discovered Listings <span style={{ fontSize: '9px', background: 'rgba(217, 119, 6, 0.15)', color: 'var(--primary-color)', padding: '2px 6px', borderRadius: '10px' }}>EXPERIMENTAL</span>
+                  </label>
                 </div>
 
                 <div style={{ display: 'flex', gap: '12px', marginTop: '4px' }}>
