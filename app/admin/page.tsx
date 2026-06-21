@@ -1378,14 +1378,43 @@ export default function AdminPage() {
     );
   }
 
+  const tabHeaders: Record<string, { title: string; subtext: string }> = {
+    listings: {
+      title: 'Catalog Listings',
+      subtext: 'View, search, edit and manage your active affiliate catalog products'
+    },
+    curator: {
+      title: 'AI Product Curator',
+      subtext: 'Ingest raw Amazon details to generate optimized, aesthetic affiliate copy'
+    },
+    collections: {
+      title: 'AI Scene Collections',
+      subtext: 'Group matching products and generate blended, photorealistic AI mockups'
+    },
+    influencer: {
+      title: 'Influencer Planner',
+      subtext: 'Generate video hooks, voiceover scripts, and auto-reply trigger keywords'
+    },
+    responder: {
+      title: 'Auto-Responder Logs',
+      subtext: 'Track real-time Instagram webhook requests, DM dispatches, and public replies'
+    },
+    settings: {
+      title: 'Hub Settings',
+      subtext: 'Configure your brand style, affiliate partner tags, and external API keys'
+    }
+  };
+  const activeHeader = tabHeaders[activeTab] || { title: 'Dashboard', subtext: 'Manage your workspace' };
+
   return (
     <div className={`container ${styles.adminWrapper}`}>
-      {/* Header */}
-      <div className={styles.header}>
-        <div className={styles.headerInfo}>
-          <h1>{settings.brand_name || 'Hub'} Dashboard</h1>
-          <p>{settings.brand_tagline || 'Manage your affiliate workspace and site theme.'}</p>
+      {/* Sidebar Navigation */}
+      <div className={styles.sidebar}>
+        <div className={styles.sidebarBrand}>
+          <Sparkles className="accent-text" size={20} />
+          <h2>{settings.brand_name || 'Hub'} Control</h2>
         </div>
+        
         <div className={styles.tabNav}>
           <button 
             className={`${styles.tabBtn} ${activeTab === 'listings' ? styles.activeTabBtn : ''}`}
@@ -1423,27 +1452,32 @@ export default function AdminPage() {
           >
             <Settings size={16} /> Hub Settings
           </button>
-          <button 
-            className={styles.tabBtn}
-            onClick={handleLogout}
-            style={{ color: '#ef4444' }}
-            title="Log out from admin session"
-          >
-            <LogOut size={16} /> Logout
-          </button>
         </div>
+
+        <button 
+          className={styles.logoutBtn}
+          onClick={handleLogout}
+          title="Log out from admin session"
+        >
+          <LogOut size={16} /> Logout
+        </button>
       </div>
 
-      {/* Global alert messages */}
-      {message && (
-        <div className={`${styles.alert} ${message.type === 'error' ? styles.alertError : styles.alertSuccess}`}>
-          <AlertCircle size={18} />
-          <span>{message.text}</span>
-        </div>
-      )}
-
-      {/* Main Tab Content */}
+      {/* Main Content Pane */}
       <div className={styles.mainContent}>
+        {/* Active View Header */}
+        <div className={styles.contentHeader}>
+          <h1>{activeHeader.title}</h1>
+          <p>{activeHeader.subtext}</p>
+        </div>
+
+        {/* Global alert messages */}
+        {message && (
+          <div className={`${styles.alert} ${message.type === 'error' ? styles.alertError : styles.alertSuccess}`}>
+            <AlertCircle size={18} />
+            <span>{message.text}</span>
+          </div>
+        )}
         {/* Listings History Tab */}
         {activeTab === 'listings' && (
           <div className="animated-fade-in">

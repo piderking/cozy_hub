@@ -1,66 +1,121 @@
 .adminWrapper {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 32px;
   padding: 40px 0;
   min-height: 100vh;
+  align-items: start;
   animation: fadeIn 0.4s ease-out;
 }
 
-.header {
+.sidebar {
+  position: sticky;
+  top: 40px;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 40px;
+  flex-direction: column;
+  gap: 24px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  padding: 24px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
 }
 
-.headerInfo h1 {
-  font-size: 32px;
-  color: var(--text-color);
+.sidebarBrand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.sidebarBrand h2 {
+  font-size: 20px;
+  font-weight: 800;
   background: linear-gradient(135deg, var(--text-color) 0%, rgba(255, 255, 255, 0.7) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-}
-
-.headerInfo p {
-  color: var(--text-muted);
-  margin-top: 4px;
+  margin: 0;
 }
 
 .tabNav {
   display: flex;
-  gap: 8px;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid var(--border-color);
-  padding: 6px;
-  border-radius: var(--radius-sm);
+  flex-direction: column;
+  gap: 6px;
 }
 
 .tabBtn {
   background: transparent;
   border: none;
   color: var(--text-muted);
-  padding: 10px 20px;
+  padding: 12px 16px;
   font-size: 14px;
   font-weight: 600;
   border-radius: var(--radius-sm);
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   transition: var(--transition);
+  width: 100%;
+  text-align: left;
 }
 
 .tabBtn:hover {
   color: var(--text-color);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateX(4px);
 }
 
 .activeTabBtn {
   color: #fff;
   background: var(--primary-color) !important;
-  box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.3);
+  box-shadow: 0 4px 12px rgba(var(--primary-rgb), 0.25);
+  transform: translateX(4px);
+}
+
+.logoutBtn {
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: var(--transition);
+  width: 100%;
+}
+
+.logoutBtn:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.contentHeader {
+  margin-bottom: 30px;
+}
+
+.contentHeader h1 {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text-color);
+  margin-bottom: 4px;
+}
+
+.contentHeader p {
+  color: var(--text-muted);
+  font-size: 14px;
 }
 
 .mainContent {
-  margin-top: 20px;
+  min-width: 0;
 }
 
 /* Listings Tab */
@@ -473,5 +528,46 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (max-width: 900px) {
+  .adminWrapper {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding: 20px 0;
+  }
+  .sidebar {
+    position: static;
+    width: 100%;
+    gap: 16px;
+    padding: 20px;
+  }
+  .sidebarBrand {
+    border-bottom: none;
+    padding-bottom: 0;
+    justify-content: center;
+  }
+  .tabNav {
+    flex-direction: row;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    width: 100%;
+    gap: 8px;
+  }
+  .tabBtn {
+    width: auto;
+    white-space: nowrap;
+    padding: 10px 16px;
+  }
+  .tabBtn:hover {
+    transform: none;
+  }
+  .activeTabBtn {
+    transform: none;
+  }
+  .logoutBtn {
+    width: 100%;
+    margin-top: 0;
   }
 }
