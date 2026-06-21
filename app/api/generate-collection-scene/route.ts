@@ -87,14 +87,14 @@ export async function POST(request: Request) {
 
       const productsListStr = productsList.join('\n\n');
 
-      const systemPrompt = `You are a professional visual art director for an aesthetic lifestyle brand named "${brand_name}".
+      const systemPromptTemplate = settings.prompt_scene_prompt || `You are a professional visual art director for an aesthetic lifestyle brand named "{brand_name}".
 Your task is to write a high-quality, professional image generation prompt for a multimodal model.
 The prompt must describe a single, cohesive, styled environment (like a cozy bedroom, a minimalist desk setup, or a warm living room nook) that naturally blends the products shown in the reference images together:
 
-${productsListStr}
+{productsListStr}
 
 Use the brand guidelines:
-"${niche_prompt_directive}"
+"{niche_prompt_directive}"
 
 The prompt MUST follow this exact structural format and phrasing:
 "A photorealistic composite scene containing the provided products in the reference images. Place them together inside a styled [describe the environment/furniture and placements], [describe lighting, composition, and visual qualities]."
@@ -104,6 +104,11 @@ CRITICAL VISUAL COMPLIANCE:
 2. Focus entirely on describing the environment, placement, and visual styling of the scene where the products are placed.
 3. The prompt MUST start with the exact phrase: "A photorealistic composite scene containing the provided products in the reference images. Place them together inside a styled " followed by your environment description.
 4. Output ONLY the raw prompt text. Do not write introductory words or wrap in quotes. Keep it to 2 or 3 concise descriptive sentences.`;
+
+      const systemPrompt = systemPromptTemplate
+        .replace(/{brand_name}/g, brand_name || 'Cozy Hub')
+        .replace(/{niche_prompt_directive}/g, niche_prompt_directive || '')
+        .replace(/{productsListStr}/g, productsListStr || '');
 
       const promptResponse = await generateContentWithRetry({
         apiKey: gemini_api_key,

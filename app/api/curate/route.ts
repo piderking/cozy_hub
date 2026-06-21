@@ -110,7 +110,7 @@ export async function POST(request: Request) {
     // Limit text size to avoid token overflow
     const truncatedContent = contentToParse.substring(0, 120000);
 
-    const systemPrompt = `You are a professional web scraper and structured data extractor. 
+    const systemPrompt = settings.prompt_curator || `You are a professional web scraper and structured data extractor. 
 Your task is to analyze the provided raw web content (HTML or plain text) of an Amazon product page, extract key information, and return it in a clean, valid JSON format.
 Do not make up information. If a field is not found in the text, return an empty string or empty array.
 Clean the title: remove seller fluff and keep it readable.

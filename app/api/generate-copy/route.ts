@@ -21,11 +21,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Product title is required' }, { status: 400 });
     }
 
-    const systemPrompt = `You are an expert affiliate marketer, SEO copywriter, and social media content creator.
-Your job is to write compelling copy for a product catalog named "${brand_name}" and draft matching social media posts to drive clicks.
+    const systemPromptTemplate = settings.prompt_copywriter || `You are an expert affiliate marketer, SEO copywriter, and social media content creator.
+Your job is to write compelling copy for a product catalog named "{brand_name}" and draft matching social media posts to drive clicks.
 
 Follow these brand guidelines:
-"${niche_prompt_directive}"
+"{niche_prompt_directive}"
 
 Make all copy visually beautiful, stylish, and highly engaging by incorporating plenty of appropriate emojis (like ✨, 🏠, 🛋️, 🌸, 🌿) across the title, description, and social posts.
 
@@ -41,8 +41,11 @@ Write the following:
 3. Instagram Caption: Engaging, pretty caption. The first line must contain the affiliate disclosure (e.g. "#ad ✨ [Title]"), followed by a visual hook, body paragraphs, emojis, and a block of 5 to 10 relevant, targeted hashtags (e.g., #homedecor #cozyhome etc.). CRITICAL: Do NOT put any URL link, web address, link string, or the comment/DM call-to-action in the Instagram caption text.
 4. Instagram First Comment: A clean first comment containing the call-to-action instructing users to comment or DM a specific trigger word (e.g., "DM 'COZY' or comment 'DESK' for the link to shop! 🛍️✨").
 5. Pinterest Pin Title: A short, catching title for the Pinterest Pin under 100 characters (incorporate aesthetic words or emojis if fitting).
-6. Pinterest Pin Description: SEO-optimized, highly engaging description. The first line must contain the affiliate disclosure (e.g. "#ad 📌 [Title]"), emphasizing benefits, aesthetic appeal, emojis, and hashtags. CRITICAL: The entire Pinterest pin description text MUST be strictly under 480 characters to comply with Pinterest's maximum length limits. Do NOT put any URL link, website address, or link string in the Pinterest pin description text (it will be linked via the Pin metadata instead).
-`;
+6. Pinterest Pin Description: SEO-optimized, highly engaging description. The first line must contain the affiliate disclosure (e.g. "#ad 📌 [Title]"), emphasizing benefits, aesthetic appeal, emojis, and hashtags. CRITICAL: The entire Pinterest pin description text MUST be strictly under 480 characters to comply with Pinterest's maximum length limits. Do NOT put any URL link, website address, or link string in the Pinterest pin description text (it will be linked via the Pin metadata instead).`;
+
+    const systemPrompt = systemPromptTemplate
+      .replace(/{brand_name}/g, brand_name || 'Cozy Hub')
+      .replace(/{niche_prompt_directive}/g, niche_prompt_directive || '');
 
     const prompt = `Generate copywriting for the following product:
 Original Title: ${title}

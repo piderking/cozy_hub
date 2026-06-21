@@ -57,19 +57,24 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Product title is required' }, { status: 400 });
       }
 
-      const promptGeneratorSystem = `You are a visual art director for an aesthetic product review brand named "${brand_name}".
+      const promptGeneratorSystemTemplate = settings.prompt_mockup_prompt || `You are a visual art director for an aesthetic product review brand named "{brand_name}".
 Your task is to write a high-quality, professional image generation prompt for a multimodal image-to-image model.
 The goal of the prompt is to visualize the product provided in the reference image inside a themed environment matching these guidelines:
-"${niche_prompt_directive}"
+"{niche_prompt_directive}"
 
 The prompt MUST follow this exact structural format and phrasing:
-"A photorealistic mockup of the provided product in the reference image. Place it inside a styled [describe the environment/background details matching the category '${category}' and guidelines], [describe lighting, composition, and visual qualities]."
+"A photorealistic mockup of the provided product in the reference image. Place it inside a styled [describe the environment/background details matching the category '{category}' and guidelines], [describe lighting, composition, and visual qualities]."
 
 CRITICAL INSTRUCTIONS:
 1. Do NOT describe the product itself. The model can see the reference image, so describing the product details (like shape, color, or text) is unnecessary and causes the AI to hallucinate incorrect details.
 2. Focus entirely on describing the environment, placement, and lighting where the product should be placed.
 3. The prompt MUST start with the exact phrase: "A photorealistic mockup of the provided product in the reference image. Place it inside a " followed by your environment description.
 4. Output ONLY the raw prompt text. Do not write introductory words or wrap in quotes. Keep it to 1 or 2 concise descriptive sentences.`;
+
+      const promptGeneratorSystem = promptGeneratorSystemTemplate
+        .replace(/{brand_name}/g, brand_name || 'Cozy Hub')
+        .replace(/{niche_prompt_directive}/g, niche_prompt_directive || '')
+        .replace(/{category}/g, category || '');
 
       const promptGeneratorUser = `Product Title: ${title}
 Product Details: ${rawDescription || ''}

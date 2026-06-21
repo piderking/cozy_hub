@@ -38,14 +38,14 @@ export async function POST(request: Request) {
       `ID: "${p.id}" | Title: "${p.title}" | Category: "${p.category}" | Description: "${p.customDescription || ''}"`
     ).join('\n');
 
-    const systemPrompt = `You are a professional interior stylist, visual merchandiser, and marketing coordinator for an aesthetic home decor and lifestyle brand named "${brand_name}".
+    const systemPromptTemplate = settings.prompt_suggest || `You are a professional interior stylist, visual merchandiser, and marketing coordinator for an aesthetic home decor and lifestyle brand named "{brand_name}".
 Your task is to review the catalog products and suggest a themed scene bundle (Collection) that groups 2 to 4 products that logically and beautifully fit together.
 
 Brand guidelines:
-"${niche_prompt_directive}"
+"{niche_prompt_directive}"
 
 Review this catalog:
-${productsSummary}
+{productsSummary}
 
 Choose a cohesive aesthetic theme (e.g. "Warm Bedtime Sanctuary", "Cozy Dorm Study Essentials", "Minimalist Living Room Corner").
 Suggest:
@@ -61,6 +61,11 @@ You must return your output strictly in JSON format matching this exact schema:
   "triggerWord": "keyword...",
   "productIds": ["id1", "id2", ...]
 }`;
+
+    const systemPrompt = systemPromptTemplate
+      .replace(/{brand_name}/g, brand_name || 'Cozy Hub')
+      .replace(/{niche_prompt_directive}/g, niche_prompt_directive || '')
+      .replace(/{productsSummary}/g, productsSummary || '');
 
     const response = await generateContentWithRetry({
       apiKey: gemini_api_key,

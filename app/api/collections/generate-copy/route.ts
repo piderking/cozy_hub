@@ -23,23 +23,30 @@ export async function POST(request: Request) {
 
     const productsList = products.map(p => `- ${p.title} (${p.category})`).join('\n');
 
-    const systemPrompt = `You are a professional social media manager and copywriter for an aesthetic lifestyle brand named "${brand_name}".
+    const systemPromptTemplate = settings.prompt_collection_copy || `You are a professional social media manager and copywriter for an aesthetic lifestyle brand named "{brand_name}".
 Your task is to write high-converting social media copy for a themed scene bundle (Collection) that features multiple products.
 Brand guidelines:
-"${niche_prompt_directive}"
+"{niche_prompt_directive}"
 
 The collection details:
-Title: "${title}"
-Description: "${description}"
+Title: "{title}"
+Description: "{description}"
 Products in this scene:
-${productsList}
+{productsList}
 
 CRITICAL COMPLIANCE & TRIGGER RULES:
 1. First line of EVERY post must start with an FTC-compliant affiliate disclosure (e.g. '#ad').
-2. For Instagram: The caption must explicitly instruct users to comment or DM a specific word (we suggest: "${triggerWord || 'cozy'}") to receive the link to this collection in their DMs automatically (e.g., "Comment '${triggerWord || 'cozy'}' or DM me to get the setup details sent to your DMs! 💻✨"). Do NOT include any direct link, URL, or website address in the Instagram caption text.
+2. For Instagram: The caption must explicitly instruct users to comment or DM a specific word (we suggest: "{triggerWord}") to receive the link to this collection in their DMs automatically (e.g., "Comment '{triggerWord}' or DM me to get the setup details sent to your DMs! 💻✨"). Do NOT include any direct link, URL, or website address in the Instagram caption text.
 3. For Pinterest: The description must be under 480 characters. Do NOT put any URL link or website address in the Pinterest pin description text (it will be linked via the Pin metadata instead).
-4. Use plenty of appropriate emojis (✨, 🏠, 🛋️, 🕯️, etc.) to style the text beautifully.
+4. Use plenty of appropriate emojis to style the text beautifully.`;
 
+    const systemPrompt = systemPromptTemplate
+      .replace(/{brand_name}/g, brand_name || 'Cozy Hub')
+      .replace(/{niche_prompt_directive}/g, niche_prompt_directive || '')
+      .replace(/{title}/g, title || '')
+      .replace(/{description}/g, description || '')
+      .replace(/{productsList}/g, productsList || '')
+      .replace(/{triggerWord}/g, triggerWord || 'cozy') + `
 Return the outputs strictly in JSON format with these exact keys:
 {
   "instagramPost": "Instagram caption...",

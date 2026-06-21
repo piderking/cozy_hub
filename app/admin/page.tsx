@@ -25,7 +25,11 @@ import {
   MessageSquare,
   Play,
   RefreshCw,
-  Download
+  Download,
+  Palette,
+  Sliders,
+  User,
+  Terminal
 } from 'lucide-react';
 import styles from './admin.module.css';
 
@@ -60,7 +64,134 @@ interface HubSettings {
   niche_prompt_directive: string;
   store_url: string;
   bot_username: string;
+
+  // New Brand profile fields
+  target_audience: string;
+  store_aesthetic: string;
+  brand_voice: string;
+  brand_color_ideas: string;
+  content_focus: string;
+  store_direction: string;
+  instagram_cta_style: string;
+  exclude_keywords: string;
+
+  // New Custom Prompt fields
+  prompt_curator: string;
+  prompt_copywriter: string;
+  prompt_collection_copy: string;
+  prompt_suggest: string;
+  prompt_influencer: string;
+  prompt_scene_prompt: string;
+  prompt_mockup_prompt: string;
 }
+
+const DEFAULT_PROMPTS = {
+  prompt_curator: `You are a professional web scraper and structured data extractor. 
+Your task is to analyze the provided raw web content (HTML or plain text) of an Amazon product page, extract key information, and return it in a clean, valid JSON format.
+Do not make up information. If a field is not found in the text, return an empty string or empty array.
+Clean the title: remove seller fluff and keep it readable.
+Raw Description: Extract a comprehensive text summary of the original product description, details, specifications or bullet points found on the page.
+Category: Choose a single category matching the product (e.g., Bedroom, Living Room, Desk Setup, Kitchen, Tech, Apparel, Outdoors).
+Pros: List 2 to 3 pros.
+Cons: List 1 to 2 cons.
+Features: List 3 to 5 main features.
+Stars: Extract the customer rating as a float between 1.0 and 5.0 (e.g., 4.6).
+Reviews Count: Extract the total number of ratings/reviews as a formatted string (e.g., "12,845" or "943").`,
+
+  prompt_copywriter: `You are an expert affiliate marketer, SEO copywriter, and social media content creator.
+Your job is to write compelling copy for a product catalog named "{brand_name}" and draft matching social media posts to drive clicks.
+
+Follow these brand guidelines:
+"{niche_prompt_directive}"
+
+Make all copy visually beautiful, stylish, and highly engaging by incorporating plenty of appropriate emojis (like ✨, 🏠, 🛋️, 🌸, 🌿) across the title, description, and social posts.
+
+CRITICAL COMPLIANCE REQUIREMENT: You MUST include a clear affiliate relationship disclosure (such as '#ad' or '#CommissionsEarned') in the very first line of each social media post draft (Instagram, Pinterest) to comply with FTC "Above the Fold" guidelines. This disclosure must appear before any link or main body content.
+
+Use the product title, raw description, and category details to capture its aesthetic style, colors, materials, and design details in your copywriting. Make sure the custom description fits the style of the product.
+
+Do NOT mention any pricing or cost in the catalog description or social media posts, as static prices violate Amazon Associates policies.
+
+Write the following:
+1. Custom Title: A clean, aesthetic, and themed title for the product listing with an emoji (e.g. "Minimalist Walnut Desk Lamp 💡" instead of the original long junk-filled Amazon title).
+2. Custom Description: A rich, paragraph-based website review/description (150-250 words) with emojis that describes the product, why it's great, and how it fits into the brand's style/niche.
+3. Instagram Caption: Engaging, pretty caption. The first line must contain the affiliate disclosure (e.g. "#ad ✨ [Title]"), followed by a visual hook, body paragraphs, emojis, and a block of 5 to 10 relevant, targeted hashtags (e.g., #homedecor #cozyhome etc.). CRITICAL: Do NOT put any URL link, web address, link string, or the comment/DM call-to-action in the Instagram caption text.
+4. Instagram First Comment: A clean first comment containing the call-to-action instructing users to comment or DM a specific trigger word (e.g., "DM 'COZY' or comment 'DESK' for the link to shop! 🛍️✨").
+5. Pinterest Pin Title: A short, catching title for the Pinterest Pin under 100 characters (incorporate aesthetic words or emojis if fitting).
+6. Pinterest Pin Description: SEO-optimized, highly engaging description. The first line must contain the affiliate disclosure (e.g. "#ad 📌 [Title]"), emphasizing benefits, aesthetic appeal, emojis, and hashtags. CRITICAL: The entire Pinterest pin description text MUST be strictly under 480 characters to comply with Pinterest's maximum length limits. Do NOT put any URL link, website address, or link string in the Pinterest pin description text (it will be linked via the Pin metadata instead).`,
+
+  prompt_collection_copy: `You are a professional social media manager and copywriter for an aesthetic lifestyle brand named "{brand_name}".
+Your task is to write high-converting social media copy for a themed scene bundle (Collection) that features multiple products.
+Brand guidelines:
+"{niche_prompt_directive}"
+
+The collection details:
+Title: "{title}"
+Description: "{description}"
+Products in this scene:
+{productsList}
+
+CRITICAL COMPLIANCE & TRIGGER RULES:
+1. First line of EVERY post must start with an FTC-compliant affiliate disclosure (e.g. '#ad').
+2. For Instagram: The caption must explicitly instruct users to comment or DM a specific word (we suggest: "{triggerWord}") to receive the link to this collection in their DMs automatically (e.g., "Comment '{triggerWord}' or DM me to get the setup details sent to your DMs! 💻✨"). Do NOT include any direct link, URL, or website address in the Instagram caption text.
+3. For Pinterest: The description must be under 480 characters. Do NOT put any URL link or website address in the Pinterest pin description text (it will be linked via the Pin metadata instead).
+4. Use plenty of appropriate emojis to style the text beautifully.`,
+
+  prompt_suggest: `You are a professional interior stylist, visual merchandiser, and marketing coordinator for an aesthetic home decor and lifestyle brand named "{brand_name}".
+Your task is to review the catalog products and suggest a themed scene bundle (Collection) that groups 2 to 4 products that logically and beautifully fit together.
+
+Brand guidelines:
+"{niche_prompt_directive}"
+
+Review this catalog:
+{productsSummary}
+
+Choose a cohesive aesthetic theme (e.g. "Warm Bedtime Sanctuary", "Cozy Dorm Study Essentials", "Minimalist Living Room Corner").
+Suggest:
+1. Title: An engaging, aesthetic title for the collection.
+2. Description: A beautiful, paragraph-based description (100-150 words) describing the scene, the styling, and how the products complement each other.
+3. TriggerWord: A single, short, clean trigger word for Instagram comments (e.g. "cozy", "desk", "room", "nook").
+4. Product IDs: The array of matching product IDs you selected from the list above. You MUST choose ONLY valid IDs from the list provided. Do not invent any new IDs.`,
+
+  prompt_influencer: `You are a viral social media director and creative copywriter for an aesthetic home decor and lifestyle brand named "{brand_name}".
+Your task is to generate a comprehensive short-form video creation package (Reel / TikTok script outline) tailored to promote a curated set of products.
+Our brand guidelines:
+"{niche_prompt_directive}"
+
+The package must contain hook options, a suggested comment responder trigger word, an engaging caption encouraging comments, scene-by-scene filming instructions, and visual/styling tips.`,
+
+  prompt_scene_prompt: `You are a professional visual art director for an aesthetic lifestyle brand named "{brand_name}".
+Your task is to write a high-quality, professional image generation prompt for a multimodal model.
+The prompt must describe a single, cohesive, styled environment (like a cozy bedroom, a minimalist desk setup, or a warm living room nook) that naturally blends the products shown in the reference images together:
+
+{productsListStr}
+
+Use the brand guidelines:
+"{niche_prompt_directive}"
+
+The prompt MUST follow this exact structural format and phrasing:
+"A photorealistic composite scene containing the provided products in the reference images. Place them together inside a styled [describe the environment/furniture and placements], [describe lighting, composition, and visual qualities]."
+
+CRITICAL VISUAL COMPLIANCE:
+1. Do NOT describe the products themselves. The model can see the reference images, so describing product details (like shape, color, or text) is unnecessary and causes the AI to hallucinate incorrect details.
+2. Focus entirely on describing the environment, placement, and visual styling of the scene where the products are placed.
+3. The prompt MUST start with the exact phrase: "A photorealistic composite scene containing the provided products in the reference images. Place them together inside a styled " followed by your environment description.
+4. Output ONLY the raw prompt text. Do not write introductory words or wrap in quotes. Keep it to 2 or 3 concise descriptive sentences.`,
+
+  prompt_mockup_prompt: `You are a visual art director for an aesthetic product review brand named "{brand_name}".
+Your task is to write a high-quality, professional image generation prompt for a multimodal image-to-image model.
+The goal of the prompt is to visualize the product provided in the reference image inside a themed environment matching these guidelines:
+"{niche_prompt_directive}"
+
+The prompt MUST follow this exact structural format and phrasing:
+"A photorealistic mockup of the provided product in the reference image. Place it inside a styled [describe the environment/background details matching the category '{category}' and guidelines], [describe lighting, composition, and visual qualities]."
+
+CRITICAL INSTRUCTIONS:
+1. Do NOT describe the product itself. The model can see the reference image, so describing the product details (like shape, color, or text) is unnecessary and causes the AI to hallucinate incorrect details.
+2. Focus entirely on describing the environment, placement, and lighting where the product should be placed.
+3. The prompt MUST start with the exact phrase: "A photorealistic mockup of the provided product in the reference image. Place it inside a " followed by your environment description.
+4. Output ONLY the raw prompt text. Do not write introductory words or wrap in quotes. Keep it to 1 or 2 concise descriptive sentences.`
+};
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<'listings' | 'curator' | 'settings' | 'collections' | 'influencer' | 'responder'>('listings');
@@ -123,7 +254,28 @@ export default function AdminPage() {
     niche_prompt_directive: '',
     store_url: '',
     bot_username: '',
+
+    target_audience: '',
+    store_aesthetic: '',
+    brand_voice: '',
+    brand_color_ideas: '',
+    content_focus: '',
+    store_direction: '',
+    instagram_cta_style: '',
+    exclude_keywords: '',
+
+    prompt_curator: '',
+    prompt_copywriter: '',
+    prompt_collection_copy: '',
+    prompt_suggest: '',
+    prompt_influencer: '',
+    prompt_scene_prompt: '',
+    prompt_mockup_prompt: '',
   });
+
+  const [activeSettingsSection, setActiveSettingsSection] = useState<'profile' | 'visuals' | 'integrations' | 'prompts'>('profile');
+  const [isGeneratingDirection, setIsGeneratingDirection] = useState(false);
+  const [generatedDirectionResult, setGeneratedDirectionResult] = useState<any | null>(null);
 
   // Listings State
   const [products, setProducts] = useState<Product[]>([]);
@@ -716,6 +868,79 @@ export default function AdminPage() {
     } finally {
       setLoading(prev => ({ ...prev, save: false }));
     }
+  };
+
+  const handleGenerateDirection = async () => {
+    if (!settings.brand_name) {
+      showMessage('Please enter a Brand Name first.', 'error');
+      return;
+    }
+    
+    setIsGeneratingDirection(true);
+    setGeneratedDirectionResult(null);
+    try {
+      const res = await fetch('/api/settings/generate-direction', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brand_name: settings.brand_name,
+          target_audience: settings.target_audience,
+          store_aesthetic: settings.store_aesthetic,
+          brand_voice: settings.brand_voice,
+          brand_color_ideas: settings.brand_color_ideas,
+          content_focus: settings.content_focus
+        })
+      });
+      
+      const data = await res.json();
+      if (res.ok && data.suggestion) {
+        setGeneratedDirectionResult(data.suggestion);
+        showMessage('Brand direction suggested successfully! Review details below.');
+      } else {
+        showMessage(data.error || 'Failed to suggest brand direction', 'error');
+      }
+    } catch (err: any) {
+      showMessage(err.message || 'Error generating brand direction', 'error');
+    } finally {
+      setIsGeneratingDirection(false);
+    }
+  };
+
+  const handleApplyGeneratedDirection = () => {
+    if (!generatedDirectionResult) return;
+    
+    setSettings(prev => ({
+      ...prev,
+      brand_tagline: generatedDirectionResult.brand_tagline || prev.brand_tagline,
+      store_direction: generatedDirectionResult.store_direction || prev.store_direction,
+      niche_prompt_directive: generatedDirectionResult.niche_prompt_directive || prev.niche_prompt_directive
+    }));
+    
+    showMessage('Applied generated direction, tagline, and guidelines. Click "Save Configurations" to persist.');
+  };
+
+  const handleApplyGeneratedColors = () => {
+    if (!generatedDirectionResult || !generatedDirectionResult.colors) return;
+    
+    const { primary_color, secondary_color, background_color, text_color } = generatedDirectionResult.colors;
+    
+    setSettings(prev => ({
+      ...prev,
+      primary_color: primary_color || prev.primary_color,
+      secondary_color: secondary_color || prev.secondary_color,
+      background_color: background_color || prev.background_color,
+      text_color: text_color || prev.text_color
+    }));
+    
+    showMessage('Applied recommended colors to color picker inputs. Click "Save Configurations" to persist.');
+  };
+
+  const handleResetPrompt = (key: 'prompt_curator' | 'prompt_copywriter' | 'prompt_collection_copy' | 'prompt_suggest' | 'prompt_influencer' | 'prompt_scene_prompt' | 'prompt_mockup_prompt') => {
+    setSettings(prev => ({
+      ...prev,
+      [key]: DEFAULT_PROMPTS[key] || ''
+    }));
+    showMessage('Reset prompt template to default value. Click "Save Configurations" to persist.');
   };
 
   // Parsing amazon product page content using Gemini
@@ -2161,158 +2386,571 @@ export default function AdminPage() {
               </div>
             ) : (
               <form onSubmit={handleSaveSettings} className={styles.settingsGrid}>
-                {/* Branding Block */}
-                <div className={`glass-panel ${styles.settingsCard}`}>
-                  <h2>Branding Profile</h2>
-                  <div className={styles.formGroup}>
-                    <label>Shop Name / Brand Name</label>
-                    <input 
-                      type="text" 
-                      className="glass-input" 
-                      value={settings.brand_name}
-                      onChange={(e) => setSettings(prev => ({ ...prev, brand_name: e.target.value }))}
-                      placeholder="e.g. Cozy Hub"
-                    />
-                    <p className="text-muted" style={{ fontSize: '11px', marginTop: '4px' }}>
-                      This changes the logo, website titles, footer disclaimers, and SEO headers dynamically across the public site.
-                    </p>
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Tagline / Description</label>
-                    <input 
-                      type="text" 
-                      className="glass-input" 
-                      value={settings.brand_tagline}
-                      onChange={(e) => setSettings(prev => ({ ...prev, brand_tagline: e.target.value }))}
-                      placeholder="Curated aesthetic setups and items..."
-                    />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Amazon Associates Tracking ID (Tag)</label>
-                    <input 
-                      type="text" 
-                      className="glass-input" 
-                      value={settings.amazon_tag}
-                      onChange={(e) => setSettings(prev => ({ ...prev, amazon_tag: e.target.value }))}
-                      placeholder="e.g. cozyhub-20"
-                    />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Store Base URL (Domain)</label>
-                    <input 
-                      type="text" 
-                      className="glass-input" 
-                      value={settings.store_url}
-                      onChange={(e) => setSettings(prev => ({ ...prev, store_url: e.target.value }))}
-                      placeholder="e.g. https://cozyhub-production.up.railway.app"
-                    />
-                    <p className="text-muted" style={{ fontSize: '11px', marginTop: '4px' }}>
-                      Used as the domain for product and collection links dispatched via Instagram auto-DMs.
-                    </p>
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Instagram Account Username</label>
-                    <input 
-                      type="text" 
-                      className="glass-input" 
-                      value={settings.bot_username || ''}
-                      onChange={(e) => setSettings(prev => ({ ...prev, bot_username: e.target.value }))}
-                      placeholder="e.g. _cozy_hub"
-                    />
-                    <p className="text-muted" style={{ fontSize: '11px', marginTop: '4px' }}>
-                      The bot's own social media username. Webhooks originating from comments by this user will be ignored.
-                    </p>
-                  </div>
+                {/* Sub-Navigation for settings tabs */}
+                <div className={styles.settingsSubNav}>
+                  <button 
+                    type="button"
+                    className={`${styles.settingsSubNavBtn} ${activeSettingsSection === 'profile' ? styles.settingsSubNavBtnActive : ''}`}
+                    onClick={() => setActiveSettingsSection('profile')}
+                  >
+                    <User size={14} /> Brand Profile & Direction
+                  </button>
+                  <button 
+                    type="button"
+                    className={`${styles.settingsSubNavBtn} ${activeSettingsSection === 'visuals' ? styles.settingsSubNavBtnActive : ''}`}
+                    onClick={() => setActiveSettingsSection('visuals')}
+                  >
+                    <Palette size={14} /> Color Theme & Palette
+                  </button>
+                  <button 
+                    type="button"
+                    className={`${styles.settingsSubNavBtn} ${activeSettingsSection === 'integrations' ? styles.settingsSubNavBtnActive : ''}`}
+                    onClick={() => setActiveSettingsSection('integrations')}
+                  >
+                    <Sliders size={14} /> Shop Configurations
+                  </button>
+                  <button 
+                    type="button"
+                    className={`${styles.settingsSubNavBtn} ${activeSettingsSection === 'prompts' ? styles.settingsSubNavBtnActive : ''}`}
+                    onClick={() => setActiveSettingsSection('prompts')}
+                  >
+                    <Terminal size={14} /> AI Prompt Templates
+                  </button>
                 </div>
 
-                {/* Visual Style Theme Block */}
-                <div className={`glass-panel ${styles.settingsCard}`}>
-                  <h2>Theme Customization</h2>
-                  <div className={styles.colorPickerRow}>
-                    <div className={styles.formGroup}>
-                      <label>Accent Color</label>
-                      <div className={styles.colorInputWrapper}>
+                {/* Brand Profile Section */}
+                {activeSettingsSection === 'profile' && (
+                  <div className={`glass-panel ${styles.settingsCard}`} style={{ gridColumn: 'span 2' }}>
+                    <h2><User size={20} /> Brand Profile & Direction</h2>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
+                      <div className={styles.formGroup}>
+                        <label>Shop / Brand Name</label>
                         <input 
-                          type="color" 
-                          value={settings.primary_color}
-                          onChange={(e) => setSettings(prev => ({ ...prev, primary_color: e.target.value }))}
+                          type="text" 
+                          className="glass-input" 
+                          value={settings.brand_name}
+                          onChange={(e) => setSettings(prev => ({ ...prev, brand_name: e.target.value }))}
+                          placeholder="e.g. Cozy Hub"
                         />
-                        <span>{settings.primary_color}</span>
+                      </div>
+                      <div className={styles.formGroup}>
+                        <label>Brand Tagline</label>
+                        <input 
+                          type="text" 
+                          className="glass-input" 
+                          value={settings.brand_tagline}
+                          onChange={(e) => setSettings(prev => ({ ...prev, brand_tagline: e.target.value }))}
+                          placeholder="e.g. Hand-picked items to make your space feel like home"
+                        />
                       </div>
                     </div>
 
-                    <div className={styles.formGroup}>
-                      <label>Glass Card Base</label>
-                      <div className={styles.colorInputWrapper}>
-                        <input 
-                          type="color" 
-                          value={settings.secondary_color}
-                          onChange={(e) => setSettings(prev => ({ ...prev, secondary_color: e.target.value }))}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginTop: '16px' }}>
+                      <div className={styles.formGroup}>
+                        <label>Target Audience</label>
+                        <textarea 
+                          className="glass-input" 
+                          style={{ minHeight: '60px', resize: 'vertical' }}
+                          value={settings.target_audience}
+                          onChange={(e) => setSettings(prev => ({ ...prev, target_audience: e.target.value }))}
+                          placeholder="Describe your ideal customers (e.g. design-conscious students, remote workers)"
                         />
-                        <span>{settings.secondary_color}</span>
                       </div>
-                    </div>
-                  </div>
-
-                  <div className={styles.colorPickerRow}>
-                    <div className={styles.formGroup}>
-                      <label>Background</label>
-                      <div className={styles.colorInputWrapper}>
+                      <div className={styles.formGroup}>
+                        <label>Store Aesthetic Style</label>
                         <input 
-                          type="color" 
-                          value={settings.background_color}
-                          onChange={(e) => setSettings(prev => ({ ...prev, background_color: e.target.value }))}
+                          type="text" 
+                          className="glass-input" 
+                          value={settings.store_aesthetic}
+                          onChange={(e) => setSettings(prev => ({ ...prev, store_aesthetic: e.target.value }))}
+                          placeholder="e.g. Cozy warm minimalist, Japandi, Dark Academia"
                         />
-                        <span>{settings.background_color}</span>
                       </div>
                     </div>
 
-                    <div className={styles.formGroup}>
-                      <label>Text Main</label>
-                      <div className={styles.colorInputWrapper}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginTop: '16px' }}>
+                      <div className={styles.formGroup}>
+                        <label>Brand Voice & Tone</label>
                         <input 
-                          type="color" 
-                          value={settings.text_color}
-                          onChange={(e) => setSettings(prev => ({ ...prev, text_color: e.target.value }))}
+                          type="text" 
+                          className="glass-input" 
+                          value={settings.brand_voice}
+                          onChange={(e) => setSettings(prev => ({ ...prev, brand_voice: e.target.value }))}
+                          placeholder="e.g. Warm, welcoming, inspiring, descriptive"
                         />
-                        <span>{settings.text_color}</span>
+                      </div>
+                      <div className={styles.formGroup}>
+                        <label>Color Theme Concepts / Ideas</label>
+                        <input 
+                          type="text" 
+                          className="glass-input" 
+                          value={settings.brand_color_ideas}
+                          onChange={(e) => setSettings(prev => ({ ...prev, brand_color_ideas: e.target.value }))}
+                          placeholder="e.g. terracotta, earth tones, soft amber, dark charcoal"
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginTop: '16px' }}>
+                      <div className={styles.formGroup}>
+                        <label>Curation Focus / Product Categories</label>
+                        <input 
+                          type="text" 
+                          className="glass-input" 
+                          value={settings.content_focus}
+                          onChange={(e) => setSettings(prev => ({ ...prev, content_focus: e.target.value }))}
+                          placeholder="e.g. ambient lighting, minimalist desk setups, comfort blankets"
+                        />
+                      </div>
+                      <div className={styles.formGroup}>
+                        <label>Instagram Auto-DM CTA Format</label>
+                        <input 
+                          type="text" 
+                          className="glass-input" 
+                          value={settings.instagram_cta_style}
+                          onChange={(e) => setSettings(prev => ({ ...prev, instagram_cta_style: e.target.value }))}
+                          placeholder="DM me '{TRIGGER}' or comment '{TRIGGER}' for the link!"
+                        />
+                        <p className="text-muted" style={{ fontSize: '11px', marginTop: '4px' }}>
+                          Use <code>{`{TRIGGER}`}</code> as a placeholder for the automated keyword.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className={styles.formGroup} style={{ marginTop: '16px' }}>
+                      <label>Exclude Keywords (Comma separated)</label>
+                      <input 
+                        type="text" 
+                        className="glass-input" 
+                        value={settings.exclude_keywords}
+                        onChange={(e) => setSettings(prev => ({ ...prev, exclude_keywords: e.target.value }))}
+                        placeholder="e.g. cheap, bargain, deal, buy now"
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '24px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
+                      <button 
+                        type="button" 
+                        className="glass-button" 
+                        style={{ background: 'var(--primary-color)', color: '#fff', border: 'none' }}
+                        onClick={handleGenerateDirection}
+                        disabled={isGeneratingDirection}
+                      >
+                        {isGeneratingDirection ? <><Loader2 className="spinner" size={16} /> Generating Brand Direction...</> : <><Sparkles size={16} /> Generate Store Theme & Visual Direction</>}
+                      </button>
+                    </div>
+
+                    {generatedDirectionResult && (
+                      <div className="glass-panel animated-fade-in" style={{ marginTop: '20px', padding: '20px', border: '1px solid var(--primary-color)' }}>
+                        <h3 style={{ fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                          <Sparkles className="accent-text" size={18} /> Generated Brand Suggestions
+                        </h3>
+                        
+                        <div style={{ marginBottom: '12px' }}>
+                          <strong>Recommended Tagline:</strong>
+                          <p style={{ fontStyle: 'italic', marginTop: '4px', fontSize: '13px' }}>"{generatedDirectionResult.brand_tagline}"</p>
+                        </div>
+                        
+                        <div style={{ marginBottom: '12px' }}>
+                          <strong>Store Direction & Positioning Manifesto:</strong>
+                          <p style={{ marginTop: '4px', fontSize: '13px', lineHeight: '1.5' }}>{generatedDirectionResult.store_direction}</p>
+                        </div>
+
+                        <div style={{ marginBottom: '16px' }}>
+                          <strong>Optimized Gemini Persona Directive:</strong>
+                          <p style={{ marginTop: '4px', fontSize: '12px', background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '4px' }}>{generatedDirectionResult.niche_prompt_directive}</p>
+                        </div>
+
+                        {generatedDirectionResult.colors && (
+                          <div style={{ marginBottom: '20px' }}>
+                            <strong>Suggested Visual Color Scheme:</strong>
+                            <div style={{ display: 'flex', gap: '12px', marginTop: '8px', alignItems: 'center' }}>
+                              <div style={{ display: 'flex', gap: '4px' }}>
+                                <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: generatedDirectionResult.colors.primary_color, border: '1px solid rgba(255,255,255,0.2)' }} title={`Accent: ${generatedDirectionResult.colors.primary_color}`} />
+                                <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: generatedDirectionResult.colors.secondary_color, border: '1px solid rgba(255,255,255,0.2)' }} title={`Card Base: ${generatedDirectionResult.colors.secondary_color}`} />
+                                <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: generatedDirectionResult.colors.background_color, border: '1px solid rgba(255,255,255,0.2)' }} title={`Background: ${generatedDirectionResult.colors.background_color}`} />
+                                <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: generatedDirectionResult.colors.text_color, border: '1px solid rgba(255,255,255,0.2)' }} title={`Text Main: ${generatedDirectionResult.colors.text_color}`} />
+                              </div>
+                              <button 
+                                type="button" 
+                                className="glass-button secondary" 
+                                style={{ padding: '4px 10px', fontSize: '11px' }}
+                                onClick={handleApplyGeneratedColors}
+                              >
+                                Apply Colors
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          <button 
+                            type="button" 
+                            className="glass-button" 
+                            style={{ padding: '8px 16px', fontSize: '12px' }}
+                            onClick={handleApplyGeneratedDirection}
+                          >
+                            Apply Text & Guidelines
+                          </button>
+                          <button 
+                            type="button" 
+                            className="glass-button secondary" 
+                            style={{ padding: '8px 16px', fontSize: '12px' }}
+                            onClick={() => setGeneratedDirectionResult(null)}
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className={styles.formGroup} style={{ marginTop: '24px' }}>
+                      <label>Store Direction Narrative (Active)</label>
+                      <textarea 
+                        className="glass-input" 
+                        style={{ minHeight: '80px', resize: 'vertical' }}
+                        value={settings.store_direction}
+                        onChange={(e) => setSettings(prev => ({ ...prev, store_direction: e.target.value }))}
+                        placeholder="Manifesto narrative detailing the store theme..."
+                      />
+                    </div>
+
+                    <div className={styles.formGroup} style={{ marginTop: '16px' }}>
+                      <label>Gemini Copywriter Persona Directive (Niche Prompt Instructions - Active)</label>
+                      <textarea 
+                        className="glass-input" 
+                        style={{ minHeight: '80px', resize: 'vertical' }}
+                        value={settings.niche_prompt_directive}
+                        onChange={(e) => setSettings(prev => ({ ...prev, niche_prompt_directive: e.target.value }))}
+                        placeholder="Guideline rules passed to AI copywriting..."
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Color Theme & Palette Section */}
+                {activeSettingsSection === 'visuals' && (
+                  <>
+                    <div className={`glass-panel ${styles.settingsCard}`}>
+                      <h2><Palette size={20} /> Color Theme Customization</h2>
+                      <div className={styles.colorPickerRow}>
+                        <div className={styles.formGroup}>
+                          <label>Accent Color</label>
+                          <div className={styles.colorInputWrapper}>
+                            <input 
+                              type="color" 
+                              value={settings.primary_color}
+                              onChange={(e) => setSettings(prev => ({ ...prev, primary_color: e.target.value }))}
+                            />
+                            <span>{settings.primary_color}</span>
+                          </div>
+                        </div>
+
+                        <div className={styles.formGroup}>
+                          <label>Glass Card Base</label>
+                          <div className={styles.colorInputWrapper}>
+                            <input 
+                              type="color" 
+                              value={settings.secondary_color}
+                              onChange={(e) => setSettings(prev => ({ ...prev, secondary_color: e.target.value }))}
+                            />
+                            <span>{settings.secondary_color}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className={styles.colorPickerRow}>
+                        <div className={styles.formGroup}>
+                          <label>Background</label>
+                          <div className={styles.colorInputWrapper}>
+                            <input 
+                              type="color" 
+                              value={settings.background_color}
+                              onChange={(e) => setSettings(prev => ({ ...prev, background_color: e.target.value }))}
+                            />
+                            <span>{settings.background_color}</span>
+                          </div>
+                        </div>
+
+                        <div className={styles.formGroup}>
+                          <label>Text Main</label>
+                          <div className={styles.colorInputWrapper}>
+                            <input 
+                              type="color" 
+                              value={settings.text_color}
+                              onChange={(e) => setSettings(prev => ({ ...prev, text_color: e.target.value }))}
+                            />
+                            <span>{settings.text_color}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-muted" style={{ fontSize: '12px', marginTop: '10px' }}>
+                        Changes apply immediately to both public catalog layout sheets and the admin console on save.
+                      </p>
+                    </div>
+
+                    <div className={`glass-panel ${styles.settingsCard}`}>
+                      <h2>Visual Theme Live Preview</h2>
+                      <div 
+                        style={{ 
+                          padding: '24px', 
+                          borderRadius: '8px', 
+                          background: settings.background_color, 
+                          border: `1px solid ${settings.secondary_color}`,
+                          minHeight: '180px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+                        }}
+                      >
+                        <div>
+                          <h4 style={{ color: settings.text_color, margin: '0 0 8px 0', fontSize: '16px', fontWeight: 700 }}>Cozy Setup Preview</h4>
+                          <p style={{ color: settings.text_color, opacity: 0.7, margin: 0, fontSize: '13px', lineHeight: '1.4' }}>
+                            This preview card dynamically simulates how your storefront elements render using the active color selectors.
+                          </p>
+                        </div>
+                        
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+                          <button 
+                            type="button" 
+                            className="glass-button" 
+                            style={{ 
+                              background: settings.primary_color, 
+                              color: '#fff', 
+                              border: 'none', 
+                              padding: '8px 16px', 
+                              borderRadius: '4px',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              cursor: 'default'
+                            }}
+                          >
+                            Accent Color
+                          </button>
+                          <button 
+                            type="button" 
+                            className="glass-button secondary" 
+                            style={{ 
+                              background: 'transparent', 
+                              color: settings.text_color, 
+                              border: `1px solid ${settings.secondary_color}`, 
+                              padding: '8px 16px', 
+                              borderRadius: '4px',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              cursor: 'default'
+                            }}
+                          >
+                            Border Color
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Shop Configurations Section */}
+                {activeSettingsSection === 'integrations' && (
+                  <div className={`glass-panel ${styles.settingsCard}`} style={{ gridColumn: 'span 2' }}>
+                    <h2><Sliders size={20} /> Shop Configurations & Integration Settings</h2>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
+                      <div className={styles.formGroup}>
+                        <label>Store Base URL (Domain)</label>
+                        <input 
+                          type="text" 
+                          className="glass-input" 
+                          value={settings.store_url}
+                          onChange={(e) => setSettings(prev => ({ ...prev, store_url: e.target.value }))}
+                          placeholder="e.g. https://cozyhub.up.railway.app"
+                        />
+                        <p className="text-muted" style={{ fontSize: '11px', marginTop: '4px' }}>
+                          Used as the base domain for affiliate redirects and scene links sent to auto-DMs.
+                        </p>
+                      </div>
+
+                      <div className={styles.formGroup}>
+                        <label>Amazon Associates Tracking ID (Tag)</label>
+                        <input 
+                          type="text" 
+                          className="glass-input" 
+                          value={settings.amazon_tag}
+                          onChange={(e) => setSettings(prev => ({ ...prev, amazon_tag: e.target.value }))}
+                          placeholder="e.g. cozyhub-20"
+                        />
+                        <p className="text-muted" style={{ fontSize: '11px', marginTop: '4px' }}>
+                          Appended to catalog Amazon links automatically for affiliate tracking commissions.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginTop: '16px' }}>
+                      <div className={styles.formGroup}>
+                        <label>Instagram Account Username</label>
+                        <input 
+                          type="text" 
+                          className="glass-input" 
+                          value={settings.bot_username || ''}
+                          onChange={(e) => setSettings(prev => ({ ...prev, bot_username: e.target.value }))}
+                          placeholder="e.g. _cozy_hub"
+                        />
+                        <p className="text-muted" style={{ fontSize: '11px', marginTop: '4px' }}>
+                          Used to identify and ignore webhooks generated by the bot's own public comments.
+                        </p>
+                      </div>
+
+                      <div className={styles.formGroup}>
+                        <label>Pinterest Board ID (For Pinterest posting)</label>
+                        <input 
+                          type="text" 
+                          className="glass-input" 
+                          value={settings.pinterest_board_id}
+                          onChange={(e) => setSettings(prev => ({ ...prev, pinterest_board_id: e.target.value }))}
+                          placeholder="e.g. 107579166..."
+                        />
+                        <p className="text-muted" style={{ fontSize: '11px', marginTop: '4px' }}>
+                          The board ID where automated pins will be published via Zernio.
+                        </p>
                       </div>
                     </div>
                   </div>
-                  <p className="text-muted" style={{ fontSize: '12px', marginTop: '10px' }}>
-                    Changes apply immediately to both public catalog layout sheets and the admin console on save.
-                  </p>
-                </div>
+                )}
 
-                {/* Store Config Block */}
-                <div className={`glass-panel ${styles.settingsCard}`} style={{ gridColumn: 'span 2' }}>
-                  <h2>Store Integrations & Directives</h2>
-                  <div className={styles.formGroup}>
-                    <label>Pinterest Board ID (For Pinterest posting)</label>
-                    <input 
-                      type="text" 
-                      className="glass-input" 
-                      value={settings.pinterest_board_id}
-                      onChange={(e) => setSettings(prev => ({ ...prev, pinterest_board_id: e.target.value }))}
-                      placeholder="e.g. 107579166..."
-                    />
+                {/* AI Prompt Templates Section */}
+                {activeSettingsSection === 'prompts' && (
+                  <div className={`glass-panel ${styles.settingsCard}`} style={{ gridColumn: 'span 2' }}>
+                    <h2><Terminal size={20} /> AI Prompt Templates Customizer</h2>
+                    <p className="text-muted" style={{ fontSize: '13px', marginBottom: '24px' }}>
+                      Fully customize the system instructions and rules that Gemini uses across different tasks. 
+                      Use dynamic placeholders inside curly braces (e.g. <code>{`{brand_name}`}</code>) which will be filled in automatically.
+                    </p>
+
+                    {/* Curator prompt */}
+                    <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '20px', marginBottom: '20px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                        <strong style={{ fontSize: '14px' }}>1. AI Curator Scraper Prompt (Parsing Amazon Pages)</strong>
+                        <button type="button" className="glass-button secondary" style={{ padding: '4px 10px', fontSize: '11px' }} onClick={() => handleResetPrompt('prompt_curator')}>Reset to Default</button>
+                      </div>
+                      <textarea 
+                        className="glass-input" 
+                        style={{ minHeight: '120px', fontSize: '13px', fontFamily: 'monospace', resize: 'vertical' }}
+                        value={settings.prompt_curator}
+                        onChange={(e) => setSettings(prev => ({ ...prev, prompt_curator: e.target.value }))}
+                      />
+                      <p className="text-muted" style={{ fontSize: '11px', marginTop: '4px' }}>
+                        Inputs analyzed: Amazon HTML/Plain Text source. Output must return structured JSON format containing titles, description features, pros, cons, ratings.
+                      </p>
+                    </div>
+
+                    {/* Copywriter prompt */}
+                    <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '20px', marginBottom: '20px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                        <strong style={{ fontSize: '14px' }}>2. Product Copywriter Persona Prompt (Descriptions & Captions)</strong>
+                        <button type="button" className="glass-button secondary" style={{ padding: '4px 10px', fontSize: '11px' }} onClick={() => handleResetPrompt('prompt_copywriter')}>Reset to Default</button>
+                      </div>
+                      <textarea 
+                        className="glass-input" 
+                        style={{ minHeight: '140px', fontSize: '13px', fontFamily: 'monospace', resize: 'vertical' }}
+                        value={settings.prompt_copywriter}
+                        onChange={(e) => setSettings(prev => ({ ...prev, prompt_copywriter: e.target.value }))}
+                      />
+                      <p className="text-muted" style={{ fontSize: '11px', marginTop: '4px' }}>
+                        Available placeholders: <code>{`{brand_name}`}</code>, <code>{`{niche_prompt_directive}`}</code>. Output must return custom titles, website descriptions, IG captions, Pinterest pins.
+                      </p>
+                    </div>
+
+                    {/* Collection copy prompt */}
+                    <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '20px', marginBottom: '20px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                        <strong style={{ fontSize: '14px' }}>3. Scene Collection Copywriter Prompt (Social Captions)</strong>
+                        <button type="button" className="glass-button secondary" style={{ padding: '4px 10px', fontSize: '11px' }} onClick={() => handleResetPrompt('prompt_collection_copy')}>Reset to Default</button>
+                      </div>
+                      <textarea 
+                        className="glass-input" 
+                        style={{ minHeight: '120px', fontSize: '13px', fontFamily: 'monospace', resize: 'vertical' }}
+                        value={settings.prompt_collection_copy}
+                        onChange={(e) => setSettings(prev => ({ ...prev, prompt_collection_copy: e.target.value }))}
+                      />
+                      <p className="text-muted" style={{ fontSize: '11px', marginTop: '4px' }}>
+                        Available placeholders: <code>{`{brand_name}`}</code>, <code>{`{niche_prompt_directive}`}</code>, <code>{`{title}`}</code>, <code>{`{description}`}</code>, <code>{`{productsList}`}</code>, <code>{`{triggerWord}`}</code>.
+                      </p>
+                    </div>
+
+                    {/* Collections suggest prompt */}
+                    <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '20px', marginBottom: '20px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                        <strong style={{ fontSize: '14px' }}>4. Scene Collection Suggestion Prompt (Gemini Bundles)</strong>
+                        <button type="button" className="glass-button secondary" style={{ padding: '4px 10px', fontSize: '11px' }} onClick={() => handleResetPrompt('prompt_suggest')}>Reset to Default</button>
+                      </div>
+                      <textarea 
+                        className="glass-input" 
+                        style={{ minHeight: '120px', fontSize: '13px', fontFamily: 'monospace', resize: 'vertical' }}
+                        value={settings.prompt_suggest}
+                        onChange={(e) => setSettings(prev => ({ ...prev, prompt_suggest: e.target.value }))}
+                      />
+                      <p className="text-muted" style={{ fontSize: '11px', marginTop: '4px' }}>
+                        Available placeholders: <code>{`{brand_name}`}</code>, <code>{`{niche_prompt_directive}`}</code>, <code>{`{productsSummary}`}</code>.
+                      </p>
+                    </div>
+
+                    {/* Influencer prompt */}
+                    <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '20px', marginBottom: '20px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                        <strong style={{ fontSize: '14px' }}>5. Influencer Video Planner Prompt (Video Scripts & Hooks)</strong>
+                        <button type="button" className="glass-button secondary" style={{ padding: '4px 10px', fontSize: '11px' }} onClick={() => handleResetPrompt('prompt_influencer')}>Reset to Default</button>
+                      </div>
+                      <textarea 
+                        className="glass-input" 
+                        style={{ minHeight: '120px', fontSize: '13px', fontFamily: 'monospace', resize: 'vertical' }}
+                        value={settings.prompt_influencer}
+                        onChange={(e) => setSettings(prev => ({ ...prev, prompt_influencer: e.target.value }))}
+                      />
+                      <p className="text-muted" style={{ fontSize: '11px', marginTop: '4px' }}>
+                        Available placeholders: <code>{`{brand_name}`}</code>, <code>{`{niche_prompt_directive}`}</code>. Generates hooks, trigger suggestions, and scene details.
+                      </p>
+                    </div>
+
+                    {/* Scene prompt */}
+                    <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '20px', marginBottom: '20px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                        <strong style={{ fontSize: '14px' }}>6. Scene Mockup Image Prompt Generator (Collection Art Prompt)</strong>
+                        <button type="button" className="glass-button secondary" style={{ padding: '4px 10px', fontSize: '11px' }} onClick={() => handleResetPrompt('prompt_scene_prompt')}>Reset to Default</button>
+                      </div>
+                      <textarea 
+                        className="glass-input" 
+                        style={{ minHeight: '140px', fontSize: '13px', fontFamily: 'monospace', resize: 'vertical' }}
+                        value={settings.prompt_scene_prompt}
+                        onChange={(e) => setSettings(prev => ({ ...prev, prompt_scene_prompt: e.target.value }))}
+                      />
+                      <p className="text-muted" style={{ fontSize: '11px', marginTop: '4px' }}>
+                        Available placeholders: <code>{`{brand_name}`}</code>, <code>{`{niche_prompt_directive}`}</code>, <code>{`{productsListStr}`}</code>.
+                      </p>
+                    </div>
+
+                    {/* Mockup prompt */}
+                    <div style={{ paddingBottom: '10px', marginBottom: '10px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                        <strong style={{ fontSize: '14px' }}>7. Product Mockup Image Prompt Generator (Single Product Art Prompt)</strong>
+                        <button type="button" className="glass-button secondary" style={{ padding: '4px 10px', fontSize: '11px' }} onClick={() => handleResetPrompt('prompt_mockup_prompt')}>Reset to Default</button>
+                      </div>
+                      <textarea 
+                        className="glass-input" 
+                        style={{ minHeight: '140px', fontSize: '13px', fontFamily: 'monospace', resize: 'vertical' }}
+                        value={settings.prompt_mockup_prompt}
+                        onChange={(e) => setSettings(prev => ({ ...prev, prompt_mockup_prompt: e.target.value }))}
+                      />
+                      <p className="text-muted" style={{ fontSize: '11px', marginTop: '4px' }}>
+                        Available placeholders: <code>{`{brand_name}`}</code>, <code>{`{niche_prompt_directive}`}</code>, <code>{`{category}`}</code>.
+                      </p>
+                    </div>
                   </div>
-                  <div className={styles.formGroup}>
-                    <label>Gemini Copywriter Persona Directive (Niche Prompt Instructions)</label>
-                    <textarea 
-                      className="glass-input" 
-                      style={{ minHeight: '80px', resize: 'vertical' }}
-                      value={settings.niche_prompt_directive}
-                      onChange={(e) => setSettings(prev => ({ ...prev, niche_prompt_directive: e.target.value }))}
-                      placeholder="Provide specific instructions to Gemini describing your niche brand's tone of voice, theme, target market, etc."
-                    />
-                  </div>
-                  
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
-                    <button type="submit" className="glass-button" disabled={loading.save}>
-                      <Save size={16} /> Save Configurations
-                    </button>
-                  </div>
+                )}
+
+                {/* Universal save button for settings */}
+                <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+                  <button type="submit" className="glass-button" disabled={loading.save}>
+                    <Save size={16} /> Save Configurations
+                  </button>
                 </div>
               </form>
             )}

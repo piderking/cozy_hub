@@ -25,13 +25,16 @@ export async function POST(request: Request) {
       .map((p, idx) => `- Product ${idx + 1}: "${p.title}" (Category: ${p.category}) - ${p.customDescription || p.rawDescription || ''}`)
       .join('\n');
 
-    const systemPrompt = `You are a viral social media director and creative copywriter for an aesthetic home decor and lifestyle brand named "${brand_name}".
+    const systemPromptTemplate = settings.prompt_influencer || `You are a viral social media director and creative copywriter for an aesthetic home decor and lifestyle brand named "{brand_name}".
 Your task is to generate a comprehensive short-form video creation package (Reel / TikTok script outline) tailored to promote a curated set of products.
 Our brand guidelines:
-"${niche_prompt_directive}"
+"{niche_prompt_directive}"
 
-The package must contain hook options, a suggested comment responder trigger word, an engaging caption encouraging comments, scene-by-scene filming instructions, and visual/styling tips.
+The package must contain hook options, a suggested comment responder trigger word, an engaging caption encouraging comments, scene-by-scene filming instructions, and visual/styling tips.`;
 
+    const systemPrompt = systemPromptTemplate
+      .replace(/{brand_name}/g, brand_name || 'Cozy Hub')
+      .replace(/{niche_prompt_directive}/g, niche_prompt_directive || '') + `
 You must return your output strictly in JSON format matching this exact schema:
 {
   "themeTitle": "A catchy, aesthetic theme title for the Reel (e.g. 'Top 3 Cozy Dorm Finds ☁️')",
