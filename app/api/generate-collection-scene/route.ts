@@ -62,23 +62,26 @@ export async function POST(request: Request) {
 
       for (let idx = 0; idx < products.length; idx++) {
         const p = products[idx];
-        let imgUrl = p.mainImage || '';
+        const desc = p.customDescription || p.rawDescription || '';
+        productsList.push(`${idx + 1}. Product Title: "${p.title}" (Category: ${p.category})\n   Description Summary: ${desc}`);
+
+        let parsed = undefined;
+        // 1. Try original Amazon image URL first
         if (p.galleryImages && typeof p.galleryImages === 'string') {
           try {
             const parsedGallery = JSON.parse(p.galleryImages);
             if (parsedGallery.originalProductImage) {
-              imgUrl = parsedGallery.originalProductImage;
+              parsed = await fetchAndParseImage(parsedGallery.originalProductImage);
             }
           } catch (_) {}
         }
-        const desc = p.customDescription || p.rawDescription || '';
-        productsList.push(`${idx + 1}. Product Title: "${p.title}" (Category: ${p.category})\n   Description Summary: ${desc}`);
+        // 2. Fall back to AI-generated mainImage if original failed or doesn't exist
+        if (!parsed && p.mainImage) {
+          parsed = await fetchAndParseImage(p.mainImage);
+        }
 
-        if (imgUrl) {
-          const parsed = await fetchAndParseImage(imgUrl);
-          if (parsed) {
-            imagesList.push(parsed);
-          }
+        if (parsed) {
+          imagesList.push(parsed);
         }
       }
 
@@ -124,20 +127,23 @@ CRITICAL VISUAL COMPLIANCE:
       const parsedImages: { mimeType: string; data: string }[] = [];
       if (products && Array.isArray(products)) {
         for (const p of products) {
-          let imgUrl = p.mainImage || '';
+          let parsed = undefined;
+          // 1. Try original Amazon image URL first
           if (p.galleryImages && typeof p.galleryImages === 'string') {
             try {
               const parsedGallery = JSON.parse(p.galleryImages);
               if (parsedGallery.originalProductImage) {
-                imgUrl = parsedGallery.originalProductImage;
+                parsed = await fetchAndParseImage(parsedGallery.originalProductImage);
               }
             } catch (_) {}
           }
-          if (imgUrl) {
-            const parsed = await fetchAndParseImage(imgUrl);
-            if (parsed) {
-              parsedImages.push(parsed);
-            }
+          // 2. Fall back to AI-generated mainImage if original failed or doesn't exist
+          if (!parsed && p.mainImage) {
+            parsed = await fetchAndParseImage(p.mainImage);
+          }
+
+          if (parsed) {
+            parsedImages.push(parsed);
           }
         }
       }

@@ -83,6 +83,9 @@ export default function AdminPage() {
   const [isGeneratingCollCopy, setIsGeneratingCollCopy] = useState(false);
   const [isPublishingColl, setIsPublishingColl] = useState(false);
   const [collLoading, setCollLoading] = useState(false);
+  const [activeInspectionProduct, setActiveInspectionProduct] = useState<any>(null);
+  const [isInspectionModalOpen, setIsInspectionModalOpen] = useState(false);
+  const [isSuggestingCollection, setIsSuggestingCollection] = useState(false);
 
   // New States for Influencer Video Scripts
   const [influencerProducts, setInfluencerProducts] = useState<string[]>([]);
@@ -456,6 +459,34 @@ export default function AdminPage() {
       showMessage(err.message, 'error');
     } finally {
       setCollLoading(false);
+    }
+  };
+
+  const handleSuggestCollection = async () => {
+    setIsSuggestingCollection(true);
+    try {
+      const res = await fetch('/api/collections/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.suggestion) {
+        const { title, description, triggerWord, productIds } = data.suggestion;
+        setCollectionForm(prev => ({
+          ...prev,
+          title: title || '',
+          description: description || '',
+          triggerWord: triggerWord || 'cozy',
+          selectedProductIds: productIds || [],
+        }));
+        showMessage('AI suggested collection loaded! You can now generate the scene.');
+      } else {
+        showMessage(data.error || 'Failed to get collection suggestion', 'error');
+      }
+    } catch (err: any) {
+      showMessage(err.message, 'error');
+    } finally {
+      setIsSuggestingCollection(false);
     }
   };
 
@@ -1483,7 +1514,15 @@ export default function AdminPage() {
               <div className={styles.listingsGrid}>
                 {filteredProducts.map(prod => (
                   <div key={prod.id} className={`glass-card ${styles.productCard}`}>
-                    <div className={styles.cardImageWrapper}>
+                    <div 
+                      className={styles.cardImageWrapper}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => {
+                        setActiveInspectionProduct(prod);
+                        setIsInspectionModalOpen(true);
+                      }}
+                      title="Click to inspect product"
+                    >
                       {prod.mainImage ? (
                         <img src={prod.mainImage} alt={prod.title} className={styles.cardImage} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       ) : (
@@ -1494,7 +1533,17 @@ export default function AdminPage() {
                     </div>
                     <div className={styles.cardBody}>
                       <div className={styles.cardCategory}>{prod.category}</div>
-                      <h3 className={styles.cardTitle}>{prod.title}</h3>
+                      <h3 
+                        className={styles.cardTitle}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => {
+                          setActiveInspectionProduct(prod);
+                          setIsInspectionModalOpen(true);
+                        }}
+                        title="Click to inspect product"
+                      >
+                        {prod.title}
+                      </h3>
                       <div className={styles.cardMeta}>
                         <span className={`${styles.cardBadge} ${prod.isPublished ? styles.publishedBadge : styles.draftBadge}`}>
                           {prod.isPublished ? 'Published' : 'Draft'}
@@ -2322,7 +2371,18 @@ export default function AdminPage() {
               <div className={styles.curatorGrid}>
                 {/* Left Column: Form Details & Products */}
                 <div className="glass-panel" style={{ padding: '24px' }}>
-                  <h3 style={{ fontSize: '18px', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>Collection Configurations</h3>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
+                    <h3 style={{ fontSize: '18px', margin: 0 }}>Collection Configurations</h3>
+                    <button
+                      type="button"
+                      className="glass-button secondary"
+                      style={{ fontSize: '11px', padding: '6px 12px' }}
+                      onClick={handleSuggestCollection}
+                      disabled={isSuggestingCollection}
+                    >
+                      {isSuggestingCollection ? <Loader2 className="spinner" size={12} /> : <><Sparkles size={12} /> AI Suggest Bundle</>}
+                    </button>
+                  </div>
                   <div className={styles.formGroup}>
                     <label>Collection Title</label>
                     <input 
@@ -2361,23 +2421,41 @@ export default function AdminPage() {
                       {products.map((p) => {
                         const isChecked = collectionForm.selectedProductIds.includes(p.id);
                         return (
-                          <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px', cursor: 'pointer', borderRadius: '4px', background: isChecked ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
-                            <input 
-                              type="checkbox" 
-                              checked={isChecked}
-                              onChange={(e) => {
-                                const checked = e.target.checked;
-                                setCollectionForm(prev => ({
-                                  ...prev,
-                                  selectedProductIds: checked 
-                                    ? [...prev.selectedProductIds, p.id]
-                                    : prev.selectedProductIds.filter(id => id !== p.id)
-                                }));
+                          <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 8px', borderRadius: '4px', background: isChecked ? 'rgba(255,255,255,0.02)' : 'transparent', marginBottom: '4px' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', flex: 1, overflow: 'hidden' }}>
+                              <input 
+                                type="checkbox" 
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setCollectionForm(prev => ({
+                                    ...prev,
+                                    selectedProductIds: checked 
+                                      ? [...prev.selectedProductIds, p.id]
+                                      : prev.selectedProductIds.filter(id => id !== p.id)
+                                  }));
+                                }}
+                              />
+                              {p.mainImage && <img src={p.mainImage} alt="" style={{ width: '30px', height: '30px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0 }} />}
+                              <span style={{ fontSize: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-color)' }}>{p.title}</span>
+                              <span style={{ fontSize: '9px', opacity: 0.6, background: 'rgba(255,255,255,0.08)', padding: '2px 6px', borderRadius: '10px', marginLeft: '6px', flexShrink: 0 }}>
+                                {p.category}
+                              </span>
+                            </label>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setActiveInspectionProduct(p);
+                                setIsInspectionModalOpen(true);
                               }}
-                            />
-                            {p.mainImage && <img src={p.mainImage} alt="" style={{ width: '30px', height: '30px', objectFit: 'cover', borderRadius: '4px' }} />}
-                            <span style={{ fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.title}</span>
-                          </label>
+                              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+                              title="Inspect Product"
+                            >
+                              <Eye size={14} />
+                            </button>
+                          </div>
                         );
                       })}
                     </div>
@@ -2854,6 +2932,124 @@ export default function AdminPage() {
           </div>
         )}
       </div>
+
+      {/* Product Inspection Modal */}
+      {isInspectionModalOpen && activeInspectionProduct && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.7)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '20px',
+        }} onClick={() => setIsInspectionModalOpen(false)}>
+          <div style={{
+            background: 'rgba(20, 25, 35, 0.85)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '650px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            padding: '24px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
+          }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
+              <div>
+                <span style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--primary-color)', letterSpacing: '0.05em' }}>
+                  {activeInspectionProduct.category}
+                </span>
+                <h2 style={{ fontSize: '20px', fontWeight: 700, marginTop: '4px' }}>{activeInspectionProduct.title}</h2>
+              </div>
+              <button 
+                onClick={() => setIsInspectionModalOpen(false)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-color)', fontSize: '24px', cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}
+              >
+                &times;
+              </button>
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <div style={{ borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)', background: 'rgba(0,0,0,0.2)' }}>
+                {activeInspectionProduct.mainImage ? (
+                  <img src={activeInspectionProduct.mainImage} alt={activeInspectionProduct.title} style={{ width: '100%', height: 'auto', display: 'block' }} />
+                ) : (
+                  <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <ImageIcon size={32} className="text-muted" />
+                  </div>
+                )}
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>Rating</label>
+                  <span style={{ fontSize: '14px', fontWeight: 600 }}>
+                    {activeInspectionProduct.stars ? `★ ${activeInspectionProduct.stars} / 5` : 'No rating'}
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 400, marginLeft: '6px' }}>
+                      ({activeInspectionProduct.reviewsCount || '0'} reviews)
+                    </span>
+                  </span>
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>Affiliate Link</label>
+                  <a href={activeInspectionProduct.affiliateUrl} target="_blank" rel="noreferrer" style={{ fontSize: '13px', color: 'var(--primary-color)', wordBreak: 'break-all', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    View affiliate link <ExternalLink size={12} />
+                  </a>
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>Original Product Link</label>
+                  <a href={activeInspectionProduct.originalUrl} target="_blank" rel="noreferrer" style={{ fontSize: '12px', color: 'var(--text-muted)', wordBreak: 'break-all', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    View original page <ExternalLink size={11} />
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Review Description</label>
+              <p style={{ fontSize: '13px', lineHeight: '1.6', color: 'rgba(255,255,255,0.9)' }}>{activeInspectionProduct.customDescription || 'No description provided.'}</p>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+              <div>
+                <label style={{ fontSize: '11px', color: '#10b981', fontWeight: 600, display: 'block', marginBottom: '6px' }}>Pros</label>
+                <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {(() => {
+                    try {
+                      const pros = typeof activeInspectionProduct.pros === 'string' ? JSON.parse(activeInspectionProduct.pros) : activeInspectionProduct.pros;
+                      return Array.isArray(pros) && pros.length > 0 ? pros.map((pro: string, i: number) => <li key={i}>{pro}</li>) : <li>None specified</li>;
+                    } catch (_) {
+                      return <li>None specified</li>;
+                    }
+                  })()}
+                </ul>
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', color: '#ef4444', fontWeight: 600, display: 'block', marginBottom: '6px' }}>Cons</label>
+                <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {(() => {
+                    try {
+                      const cons = typeof activeInspectionProduct.cons === 'string' ? JSON.parse(activeInspectionProduct.cons) : activeInspectionProduct.cons;
+                      return Array.isArray(cons) && cons.length > 0 ? cons.map((con: string, i: number) => <li key={i}>{con}</li>) : <li>None specified</li>;
+                    } catch (_) {
+                      return <li>None specified</li>;
+                    }
+                  })()}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
